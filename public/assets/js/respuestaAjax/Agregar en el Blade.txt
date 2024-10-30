@@ -1,0 +1,9 @@
+
+Para SWEETALERT-1
+
+
+PARA SWEETALERT-2
+<script src="{{ asset('assets/js/respuestaAjax/libreriaSweetAlert2-11.7.3/sweetalert2.all.min.js') }}"></script>
+<script src="{{ asset('assets/js/respuestaAjax/respuestaSweetAlert2.js?v=' . time()) }}"></script>
+
+

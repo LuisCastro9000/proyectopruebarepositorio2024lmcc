@@ -1,0 +1,16 @@
+
+Para SWEETALERT-1
+<script src="{{ asset('assets/sweetAlert/sweetAlert1/sweetalert.js') }}"></script>
+
+PARA SWEETALERT-2
+<link rel="stylesheet" href="{{ asset('assets/sweetAlert/sweetAlert2-11.7.3/dist/sweetalert2.min.css') }}" />
+<script src="{{ asset('assets/sweetAlert/sweetAlert2-11.7.3/dist/sweetalert2.all.min.js') }}"></script>
+ó
+<link rel="stylesheet" href="{{ asset('assets/sweetAlert/sweetAlert2-11.7.3/sweetalert2.min.css') }}" />
+<script src="{{ asset('assets/sweetAlert/sweetAlert2-11.7.3/sweetalert2.all.min.js') }}"></script>
+
+ASSETS USADOS EN LOS ARCHIVOS BLADE SWEETALERT-2
+<link rel="stylesheet" href="{{ asset('assets/js/respuestaAjax/libreriaSweetAlert2-11.7.3/sweetalert2.min.css') }}" />
+<script src="{{ assets('assets/js/respuestaAjax/libreriaSweetAlert2-11.7.3/sweetalert2.all.min.js') }}"></script>
+
+

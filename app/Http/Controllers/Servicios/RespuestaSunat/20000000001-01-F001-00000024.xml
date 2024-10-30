@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+    <ext:UBLExtensions>
+        <ext:UBLExtension>
+            <ext:ExtensionContent><ds:Signature Id="SignIMM">
+  <ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+    <ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+  <ds:Reference URI=""><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><ds:DigestValue>7FG1rR1Q++b0UIKH7rAsREUuxvY=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>oj4RagDF8/oJcK77Tf7LxSe1bX5QIs+dB9ZRkHsj/idAGJRpqvcyGHXBUl6C/nTyv2yVE2RKC420PJqEiuj5vPgLBY6dGaooII3sSzNTontQIr8nd7APoX3sLjms44df5AlJXs9+gzVPMeAtzbyHiVfFT/J1BKIYtWVNdO95eByYK5Yf4mbByNo0sQ/8ZoSeaN5L+9904I2rOrk+yC8MoLhqpED8TS4hZ/v81rjGvLoz1JjnhB5Si09kg/iorTvLkhdJg1oLzQUYOtxQ57tv6g+8FNHIxn64QokWi9q+iAnJb9CyJ7urtvdB+EZYOWHHpobtwgOFe+/j+zek3NuE2A==</ds:SignatureValue>
+<ds:KeyInfo><ds:X509Data><ds:X509Certificate>MIIE8TCCA9mgAwIBAgICVHgwDQYJKoZIhvcNAQEFBQAwggENMRswGQYKCZImiZPyLGQBGRYLTExBTUEuUEUgU0ExCzAJBgNVBAYTAlBFMQ0wCwYDVQQIDARMSU1BMQ0wCwYDVQQHDARMSU1BMRgwFgYDVQQKDA9UVSBFTVBSRVNBIFMuQS4xRTBDBgNVBAsMPEROSSA5OTk5OTk5IFJVQyAyMDQ4MjEyMTA3MiAtIENFUlRJRklDQURPIFBBUkEgREVNT1NUUkFDScOTTjFEMEIGA1UEAww7Tk9NQlJFIFJFUFJFU0VOVEFOVEUgTEVHQUwgLSBDRVJUSUZJQ0FETyBQQVJBIERFTU9TVFJBQ0nDk04xHDAaBgkqhkiG9w0BCQEWDWRlbW9AbGxhbWEucGUwHhcNMTkwNDE3MjEwMDI0WhcNMjEwNDE2MjEwMDI0WjCCAQ0xGzAZBgoJkiaJk/IsZAEZFgtMTEFNQS5QRSBTQTELMAkGA1UEBhMCUEUxDTALBgNVBAgMBExJTUExDTALBgNVBAcMBExJTUExGDAWBgNVBAoMD1RVIEVNUFJFU0EgUy5BLjFFMEMGA1UECww8RE5JIDk5OTk5OTkgUlVDIDIwNDgyMTIxMDcyIC0gQ0VSVElGSUNBRE8gUEFSQSBERU1PU1RSQUNJw5NOMUQwQgYDVQQDDDtOT01CUkUgUkVQUkVTRU5UQU5URSBMRUdBTCAtIENFUlRJRklDQURPIFBBUkEgREVNT1NUUkFDScOTTjEcMBoGCSqGSIb3DQEJARYNZGVtb0BsbGFtYS5wZTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALLwI8RI5MCy+83tt8yzdG1DWtT9AnUdO56cK9AfUeXRSVpH4Sg1V0Cw/DnPraNAVORJnAjq01k6Cr1qDM0Geq56qG/g1L1BKH6V1FhFOWi925esrBC3J2Ezkq3pNKIoPWL+o93D8/DGcJaRqWgV9V4z2oGRZhs0OVKyY2T6rrP6K16qTXSm1lySrOkKOTPky78+8gPSVZ7+ATQ+MN4CqfwE79p+RSjn+sZ0VGS91WVNR+ZjG4rypEZpxgercQbeX3b9Qxxl7Uvx9bMwUO/QwbxgzOm9rNhrpj1eTJsPx3XzS/a5fySbhb9RSx63yjqufv02CN1NyGpmjpa32uWBjxsCAwEAAaNXMFUwHQYDVR0OBBYEFH6r4d+nl1DEp0x7oaGrnVz6yh3UMB8GA1UdIwQYMBaAFH6r4d+nl1DEp0x7oaGrnVz6yh3UMBMGA1UdJQQMMAoGCCsGAQUFBwMBMA0GCSqGSIb3DQEBBQUAA4IBAQAAQ8oujaYVHvkqp3qlnFWwsXm8+ZadYZw8v1LMPlz8uKq+N6KP0pVjnHsk3pD2jfUHH3lH4vLnKGySpJdT3zpXUK0a17dHLM5K0n/oZFPQn0Q1CfvVAYuHccdlCvSawoCDG46UPkjBtqK+SPCLDHzGVNZ5Dx26x5gBwbxM4ThMpUAIjJn2gHZs5LY2YpD/+ZsQlOgODgr6hA5CdEpJYWmhve6L53/qfYYrVRaN6xbS8zwwUG6ZiSOxoe+lVNpn0B6tMACZ0dRVSVXHYra/N0Iwy815txKnH4ixWW00KHYCmv0s7jTdofAXvgFG1nY5IkaUUIl0FYVKRPRyWEVWcHE3</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature></ext:ExtensionContent>
+        </ext:UBLExtension>
+    </ext:UBLExtensions>
+    <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+    <cbc:CustomizationID>2.0</cbc:CustomizationID>
+    <cbc:ID>F001-00000024</cbc:ID>
+    <cbc:IssueDate>2019-04-29</cbc:IssueDate>
+    <cbc:IssueTime>00:14:08</cbc:IssueTime>
+    <cbc:InvoiceTypeCode listID="0101">01</cbc:InvoiceTypeCode>
+    <cbc:Note languageLocaleID="1000"><![CDATA[NOVECIENTOS NOVENTA Y NUEVE CON 00/100 SOLES]]></cbc:Note>
+    <cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+    <cac:Signature>
+        <cbc:ID>20000000001</cbc:ID>
+        <cbc:Note>GREENTER</cbc:Note>
+        <cac:SignatoryParty>
+            <cac:PartyIdentification>
+                <cbc:ID>20000000001</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name><![CDATA[BROADCAST PERU]]></cbc:Name>
+            </cac:PartyName>
+        </cac:SignatoryParty>
+        <cac:DigitalSignatureAttachment>
+            <cac:ExternalReference>
+                <cbc:URI>#SIGN-GREEN</cbc:URI>
+            </cac:ExternalReference>
+        </cac:DigitalSignatureAttachment>
+    </cac:Signature>
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="6">20000000001</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name><![CDATA[BROADCAST PERU]]></cbc:Name>
+            </cac:PartyName>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName><![CDATA[BROADCAST PERU SAC]]></cbc:RegistrationName>
+                <cac:RegistrationAddress>
+                    <cbc:ID/>
+                    <cbc:AddressTypeCode>0000</cbc:AddressTypeCode>
+                    <cbc:CitySubdivisionName>NONE</cbc:CitySubdivisionName>
+                    <cbc:CityName>Trujillo</cbc:CityName>
+                    <cbc:CountrySubentity>NONE</cbc:CountrySubentity>
+                    <cbc:District>NONE</cbc:District>
+                    <cac:AddressLine>
+                        <cbc:Line><![CDATA[Av España #1364]]></cbc:Line>
+                    </cac:AddressLine>
+                    <cac:Country>
+                        <cbc:IdentificationCode>PE</cbc:IdentificationCode>
+                    </cac:Country>
+                </cac:RegistrationAddress>
+            </cac:PartyLegalEntity>
+            </cac:Party>
+    </cac:AccountingSupplierParty>
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="6">20000000001</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName><![CDATA[Inversiones Trujillo]]></cbc:RegistrationName>
+                </cac:PartyLegalEntity>
+            </cac:Party>
+    </cac:AccountingCustomerParty>
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="PEN">152.39</cbc:TaxAmount>
+        <cac:TaxSubtotal>
+            <cbc:TaxableAmount currencyID="PEN">846.61</cbc:TaxableAmount>
+            <cbc:TaxAmount currencyID="PEN">152.39</cbc:TaxAmount>
+            <cac:TaxCategory>
+                <cac:TaxScheme>
+                    <cbc:ID>1000</cbc:ID>
+                    <cbc:Name>IGV</cbc:Name>
+                    <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+                </cac:TaxScheme>
+            </cac:TaxCategory>
+        </cac:TaxSubtotal>
+        </cac:TaxTotal>
+    <cac:LegalMonetaryTotal>
+        <cbc:LineExtensionAmount currencyID="PEN">999.00</cbc:LineExtensionAmount>
+        <cbc:PayableAmount currencyID="PEN">999.00</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+    <cac:InvoiceLine>
+        <cbc:ID>1</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="NIU">1</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyID="PEN">846.61</cbc:LineExtensionAmount>
+        <cac:PricingReference>
+            <cac:AlternativeConditionPrice>
+                <cbc:PriceAmount currencyID="PEN">999.000000</cbc:PriceAmount>
+                <cbc:PriceTypeCode>01</cbc:PriceTypeCode>
+            </cac:AlternativeConditionPrice>
+            </cac:PricingReference>
+        <cac:TaxTotal>
+            <cbc:TaxAmount currencyID="PEN">152.39</cbc:TaxAmount>
+            <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="PEN">846.61</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="PEN">152.39</cbc:TaxAmount>
+                <cac:TaxCategory>
+                    <cbc:Percent>18</cbc:Percent>
+                    <cbc:TaxExemptionReasonCode>10</cbc:TaxExemptionReasonCode>
+                    <cac:TaxScheme>
+                        <cbc:ID>1000</cbc:ID>
+                        <cbc:Name>IGV</cbc:Name>
+                        <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+                    </cac:TaxScheme>
+                </cac:TaxCategory>
+            </cac:TaxSubtotal>
+            </cac:TaxTotal>
+        <cac:Item>
+            <cbc:Description><![CDATA[CPU Core i5 - 8gb]]></cbc:Description>
+            <cac:SellersItemIdentification>
+                <cbc:ID>PRO-7</cbc:ID>
+            </cac:SellersItemIdentification>
+            </cac:Item>
+        <cac:Price>
+            <cbc:PriceAmount currencyID="PEN">846.610169</cbc:PriceAmount>
+        </cac:Price>
+    </cac:InvoiceLine>
+    </Invoice>

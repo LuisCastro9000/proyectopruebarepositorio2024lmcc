@@ -1,0 +1,2519 @@
+<?php
+
+namespace App\Http\Controllers\Operaciones\Ventas;
+
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\DatosController;
+use Session;
+use DB;
+use DateTime;
+use PDF;
+use Dompdf\Dompdf;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
+use App\Http\Controllers\Operaciones\NumeroALetras;
+use App\Http\Controllers\Servicios\config;
+use Greenter\Model\Client\Client;
+use Greenter\Model\Company\Company;
+use Greenter\Model\Company\Address;
+use Greenter\Model\Sale\Invoice;
+use Greenter\Model\Sale\SaleDetail;
+use Greenter\Model\Sale\Legend;
+use Greenter\Ws\Services\SunatEndpoints;
+use Greenter\Report;
+
+//--use Greenter\Ws\Services\ConsultCdrService;
+//--use Greenter\Ws\Services\SoapClient;
+
+use DOMDocument;
+use Sunat\Sunat;
+
+class VentasController extends Controller
+{
+    
+//public function __construct(Request $request)
+   // {
+		//parent::__construct();
+        //$this->currentUser = $request->session()->get('user');
+		//dd($req);
+		
+		/* if ($req->session()->has('idUsuario')) {
+             $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        } */
+  //  }
+
+	public function index(Request $req){
+        if ($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        $loadDatos = new DatosController();
+        $idSucursal = Session::get('idSucursal');
+        $text = "";
+        $totalVentas = $loadDatos->getTotalVentas($idSucursal, $idUsuario);
+        $clientes = $loadDatos->getClientes($idSucursal);
+        $tipoMonedas = $loadDatos->getTipoMoneda();
+        $clientesBol = $loadDatos->getTipoClientes(1,$idSucursal);
+        $clientesFact = $loadDatos->getTipoClientes(2,$idSucursal);
+        $clientesTick = $loadDatos->getTipoClientes(3,$idSucursal);
+		
+		$cod_cliente = DB::table('sucursal')
+					   ->select('CodigoCliente')
+					   ->where('IdSucursal', $idSucursal)
+					   ->first();
+					   
+		$sucPrincipal = DB::table('sucursal')
+				   ->select('IdSucursal')
+				   ->where('CodigoCliente',$cod_cliente->CodigoCliente)
+				   ->where('Principal', 1)
+				   ->first();
+				   
+		if($sucPrincipal->IdSucursal == $idSucursal)
+	   	{
+			$productos = $loadDatos->getProductosPagination($idSucursal, $text);
+	   	}
+	   	else
+	   	{
+			$productos = $loadDatos->paginarAjaxProdSucursal($idSucursal, $text);
+		}
+		
+        $servicios = $loadDatos->getServiciosPagination($idSucursal, $text);
+        $ventasTicket = $loadDatos->getVentas($idSucursal, $idUsuario, 3);
+        $ventasFactura = $loadDatos->getVentas($idSucursal, $idUsuario, 2);
+        $ventasBoleta = $loadDatos->getVentas($idSucursal, $idUsuario, 1);
+        $permisos = $loadDatos->getPermisos($idUsuario);
+		//dd($productos);
+		
+		$subpermisos=$loadDatos->getSubPermisos($idUsuario);
+		$subniveles=$loadDatos->getSubNiveles($idUsuario);
+		
+        $fecha=date("d/m/Y");
+		$tipoComprobante = $loadDatos->getTipoComprobante();
+        $tipoDoc= $loadDatos->TipoDocumento();
+        $departamentos = $loadDatos->getDepartamentos();
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $orden = $usuarioSelect->Orden;
+        $sucursal = $loadDatos->getSucursalSelect($idSucursal);
+        $ordenSucursal = $sucursal->Orden;
+        $modulosSelect = $loadDatos->getModulosSelect($usuarioSelect->CodigoCliente);
+        $array = ['clientes' => $clientes, 'tipoMoneda' => $tipoMonedas, 'clientesTickets' => $clientesTick, 'clientesBoletas' => $clientesBol, 'clientesFacturas' => $clientesFact, 'tipoComprobante' => $tipoComprobante, 'pagoEfectivo' => '', 'totalVentas' => $totalVentas, 'departamentos' => $departamentos, 'fecha'=>$fecha,
+            'ventasTicket' => $ventasTicket, 'ventasFactura' => $ventasFactura, 'ventasBoleta' => $ventasBoleta, 'productos' => $productos, 'servicios' => $servicios, 'tipoDoc' => $tipoDoc, 'permisos' => $permisos, 'idSucursal' => $idSucursal, 'modulosSelect' => $modulosSelect, 'orden' => $orden, 'ordenSucursal' => $ordenSucursal, 'subpermisos'=>$subpermisos, 'subniveles'=>$subniveles];
+        return view('operaciones/ventas/ventas/crearVenta', $array);
+    }
+    
+    public function show(){
+        if($req->ajax()){
+            $idDoc = $req->idDoc;
+            $numDoc = $req->numDoc;
+            $datos = new Sunat();
+            if($idDoc == 3){
+                return Response(array(0 => $numDoc));
+            }
+            $search = $datos->search($numDoc);
+            if($search->success == true ){
+                if($idDoc == 1){
+                    $data = array(
+                        0 => $search->result->razon_social
+                    );
+                }
+                if($idDoc == 2){
+                    $data = array( 
+                        0 => $search->result->razon_social,
+                        1 => $search->result->nombre_comercial,
+                        2 => $search->result->direccion
+                    );
+                }
+                
+                return Response($data);
+            }else{
+                return Response(array());
+            }
+            
+        }
+    }
+    
+    public function create() {
+        /*$loadDatos = new DatosController();
+        $idSucursal = Session::get('idSucursal');
+        $idUsuario = Session::get('idUsuario');
+        $clientes = $loadDatos->getClientes($idSucursal);
+        $tipoMonedas = $loadDatos->getTipoMoneda();
+        $clientesBol = $loadDatos->getTipoClientes(1,$idSucursal);
+        $clientesFact = $loadDatos->getTipoClientes(2,$idSucursal);
+        $clientesTick = $loadDatos->getTipoClientes(3,$idSucursal);
+        $productos = $loadDatos->getProductosPagination($idSucursal);
+        $servicios = $loadDatos->getServiciosPagination($idSucursal);
+        $ventasTicket = $loadDatos->getVentas($idSucursal, 3);
+        $ventasFactura = $loadDatos->getVentas($idSucursal, 2);
+        $ventasBoleta = $loadDatos->getVentas($idSucursal, 1);
+        $permisos = $loadDatos->getPermisos($idUsuario);
+        $tipoComprobante = $loadDatos->getTipoComprobante();
+        $tipoDoc= $loadDatos->TipoDocumento();
+        $array = ['clientes' => $clientes, 'tipoMoneda' => $tipoMonedas, 'clientesTickets' => $clientesTick, 'clientesBoletas' => $clientesBol, 'clientesFacturas' => $clientesFact, 'tipoComprobante' => $tipoComprobante,
+            'ventasTicket' => $ventasTicket, 'ventasFactura' => $ventasFactura, 'ventasBoleta' => $ventasBoleta, 'productos' => $productos, 'servicios' => $servicios, 'tipoDoc' => $tipoDoc, 'permisos' => $permisos];
+        return view('operaciones/ventas/ventas/crearVenta', $array);*/
+    }
+	
+	public function store(Request $req){
+        try{
+            if($req->session()->has('idUsuario')) {
+                if($req->ajax()){
+					/* $cuenta  =  0;
+					for($k=0; $k<count($req->Precio); $k++){
+						$cuenta  =  $cuenta  + ($req->Precio[$k] * $req->Cantidad[$k]);
+					}
+					
+					$cuenta = number_format($cuenta,2,'.', ' ');
+					$totalBand = number_format($req->total,2,'.', ' ');
+				
+					if($totalBand !=  $cuenta)
+					{
+						return Response(['error','Hay Algun error  en el Calculo del total con  los precios']);
+					} */
+
+                    $idUsuario = Session::get('idUsuario');
+                    $serie = $req->serie;
+					$idTipoSunat = 'NT';
+                    if($serie == null){
+                        return Response(['alert1','Por favor, completar serie y número correlativo']);
+                    }
+                    $numero = $req->numero;
+                    $idTipoComp = $req->idTipoComp;
+                    if($idTipoComp == 0){
+                        return Response(['alert2','Por favor, elegir Tipo de comprobante']);
+                        //return back()->with('error','Por favor, elegir Tipo de comprobante')->withInput($req->all());
+                    }
+                    $idCliente = $req->cliente;
+                    if($idCliente == 0){
+                        return Response(['alert3','Por favor, elegir Cliente']);
+                        //return back()->with('error','Por favor, elegir Cliente')->withInput($req->all());
+                    }
+                    if($req->Id == null){
+                        return Response(['alert4','Por favor, agrege productos o servicios']);
+                        //return back()->with('error','Por favor, agrege productos o servicios')->withInput($req->all());
+                    }
+                    $total = $req->total;
+                    $fecha = $req->fechaEmitida;
+                    if($fecha == null){
+                        return Response(['alert5','Por favor, ingresar fecha de venta']);
+                        //return back()->with('error','Por favor, ingresar fecha de venta');
+                    }
+                    
+                    $numero = $this->completarCeros($numero);
+                    $idSucursal = Session::get('idSucursal');
+                    $verificar = $this->verificarCodigo($serie, $numero, $idSucursal);
+                    if($verificar->Cantidad > 0){
+                        //return Response(['alert6','La Serie y Número ya existen']);
+                        //return back()->with('error','La Serie y Número ya existen');
+                        $ultimoCorrelativo = $this->ultimoCorrelativo($idUsuario, $idSucursal);
+                        $sumarCorrelativo = intval($ultimoCorrelativo->Numero) + 1;
+                        $numero = $this->completarCeros($sumarCorrelativo);
+                    }
+                    $date = DateTime::createFromFormat('Y-m-d',$fecha);
+                    $fechaConvertida = $date->format("Y-m-d H:i:s");
+                    $idTipoMoneda = 1;
+                    $subtotal = $req->subtotal;
+                    $exonerada = $req->exonerada;
+                    $observacion = $req->observacion;
+                    if($exonerada == '-'){
+                        $exonerada = '0.00';
+                    }
+                    $tipoPago = $req->tipoPago;
+                    if($tipoPago == 1){		
+						$plazoCredito = '';
+                        $pagoEfect = $req->pagoEfectivo;
+                        $tipoTarjeta = $req->tipoTarjeta;
+                        $numTarjeta = $req->numTarjeta;
+                        $pagoTarjeta = $req->pagoTarjeta;
+                        $vueltoEfectivo = $req->vueltoEfectivo;
+                        if(floatval($pagoTarjeta) > 0){
+                            if($numTarjeta == '' || $numTarjeta == null){
+                                return Response(['alert7','Completar Numero de Tarjeta']);
+                                /*return back()->with('error','Completar Numero de Tarjeta')
+                                            ->withInput($req->all());*/
+                            }
+                        }
+                        $pagoEfectivo = floatval($pagoEfect) - floatval($vueltoEfectivo);
+                        $pagoTotal = floatval($pagoEfectivo) + floatval($pagoTarjeta);
+                        $_pagoTotal = round($pagoTotal, 2);
+                        $_total = round($total, 2);
+                        if($_pagoTotal != $_total){
+                            return Response(['alert8','La suma de pago efectivo y pago con tarjeta debe ser igual al Importe Total']);
+                            /*return back()->with('error','La suma de pago efectivo y pago con tarjeta debe ser igual al Importe Total')
+                                         ->withInput($req->all());*/
+                        }
+                    }else{
+						//aqui es  donde  debe  verse  el saldo
+						$contCredito=0;
+		
+					//-----------------------------------------------	
+						/* $ventaCliente = DB::table('ventas')
+										->where('IdCliente', $idCliente)
+										->where('IdSucursal', $idSucursal)
+										->where('IdTipoPago', 2)
+										->get(); */
+					//------------------------------------------------
+						$ventaCliente = DB::table('ventas')
+										->where('IdCliente', $idCliente)
+										->where('IdSucursal', $idSucursal)
+                                        ->where(function ($query) {
+                                        $query->whereNull('ventas.MotivoAnulacion')
+                                        ->orWhere('ventas.MotivoAnulacion', '=', '');
+                                        })
+                                        ->where('ventas.Nota','!=',1)
+										->where('IdTipoPago', 2)
+										->get();
+		
+						if(count($ventaCliente) >=1)
+						{
+							foreach($ventaCliente as $venta)
+							{
+								$deuda = DB::table('fecha_pago')
+										->where('IdVenta', $venta->IdVentas)
+										->first();
+										
+								if($deuda)
+								{
+									$contCredito=$contCredito+($deuda->Importe - $deuda->ImportePagado);  //suma el credito dado al cliente
+								}
+							}
+						}
+						
+						$cliente = DB::table('cliente')
+									->where('IdCliente', $idCliente)
+									->where('Estado', 'E')
+									->first();
+						if($cliente)
+						{
+							if($cliente->BandSaldo==1)
+							{
+								$saldoCredito = $cliente->SaldoCredito - ($contCredito + $req->total);
+								if($saldoCredito < 0)
+								{
+									//return Response(['alert8','El cliente '.$cliente->Nombre.'  con esta  venta sobrepasa su saldo para creditos']);
+									return Response(['alert8','El cliente '.$cliente->Nombre.'  con esta  venta sobrepasa su saldo para creditos, Su Linea de Credito Total es : '.$cliente->SaldoCredito.' Su monto usado hasta el momento es de : '.$contCredito. '. Maximo de credito a  entregar en esta compra es de : '.($req->total - abs($saldoCredito))]);
+								}
+							}
+						}						
+						
+						$plazoCredito = $req->plazoCredito;
+						
+						if(!is_numeric($plazoCredito))
+						{
+							$plazoCredito=1;
+						}
+						
+                        $pagoEfectivo = '';
+                        $tipoTarjeta = '';
+                        $numTarjeta = '';
+                        $pagoTarjeta = '';
+
+                    }
+                    $igv = $req->igv;
+                    $estado = 'Sin Valor Tributario';
+
+                    $loadDatos = new DatosController();
+                    $caja = $loadDatos->getCierreCaja($idSucursal, $idUsuario);
+                    if($caja == null){
+                        //return back()->with('caja','Abrir Caja antes de realizar una venta');
+                        return Response(['alert9','Abrir Caja antes de realizar una venta']);
+                        //echo "<script language='javascript'>alert('Abrir Caja antes de realizar una venta');window.location='../../caja/cierre-caja'</script>";
+                    }else{
+                        $stockSuficiente = $this->verificarStockSuficiente($req);
+                        
+                        if($stockSuficiente[0] == 1){
+                            $noReduceStock=0;
+							$codigoAceptado='';
+							$bandera = 1;
+                            $resumen = '';
+                            $hash = '';
+                            $mensaje = 'Se genero Ticket con éxito';
+                            if(intval($idTipoComp) < 3)
+                            {
+                                //dd($req->all);
+								//$res = $this->envioSunat($req);
+								$opcionFactura = DB::table('usuario')
+                                    ->select('OpcionFactura')
+                                    ->where('IdUsuario', $idUsuario)
+                                    ->first();
+								$config = new config();
+								if($opcionFactura->OpcionFactura  > 0)
+								{
+									if($opcionFactura->OpcionFactura == 1) //sunat
+									{
+										$see = $config->configuracion(SunatEndpoints::FE_BETA);
+									}
+									else if($opcionFactura->OpcionFactura == 2) //ose
+									{
+										$see = $config->configuracion('https://demo-ose.nubefact.com/ol-ti-itcpe/billService?wsdl');
+									}
+									else
+									{
+										return Response(['error','No  tiene Elejida la  ruta de  envio.... comuniquese con  el administrador']);
+									}
+								}
+								else
+								{
+									return Response(['error','No  tiene Elejida  el tipo de  envio.... comuniquese con  el administrador']);
+								}
+								
+								
+								if($idTipoComp == 1){
+									$idTipoSunat = '03';
+									$fecha = $req->fechaEmitida;
+                                    $date = DateTime::createFromFormat('Y-m-d',$fecha);
+                                     
+                                    
+                                    //$see = $config->configuracion('https://demo-ose.nubefact.com/ol-ti-itcpe/billService?wsdl');
+                                    $loadDatos = new DatosController();
+                                    $cliente = $loadDatos->getClienteSelect($req->cliente);
+                                    
+                                    $client = new Client();
+                                    $client->setTipoDoc(strval($cliente->CodigoSunat))//agregado
+                                        ->setNumDoc($cliente->NumeroDocumento)
+                                        ->setRznSocial($cliente->Nombre);
+                                    
+                                    // Emisor
+                                    $idSucursal = Session::get('idSucursal');
+                                    $idUsuario = Session::get('idUsuario');
+                                    $sucursal = $loadDatos->getSucursalSelect($idSucursal);
+                                    
+                                    $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+                                    $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+                                    
+                                    $address = new Address();
+                                    $address->setUbigueo($empresa->Ubigeo)
+                                            ->setDepartamento($empresa->Departamento)
+                                            ->setProvincia($empresa->Provincia)
+                                            ->setDistrito($empresa->Distrito)
+                                            ->setUrbanizacion('NONE')
+											->setCodLocal($sucursal->CodFiscal)
+                                            ->setDireccion($sucursal->DirPrin);
+                                         //   ->setDireccion($sucursal->Direccion);
+                                
+                                    $company = new Company();
+                                    $company->setRuc($empresa->Ruc)
+                                        ->setRazonSocial($empresa->Nombre)
+                                        ->setNombreComercial('NONE')
+                                        ->setAddress($address);
+                                    
+                                   	/* $exonerada = $req->exonerada;
+                                    if($exonerada == '-'){
+                                        $exonerada = '0.00';
+                                    }  */
+									
+									$exonerada=0;
+									
+                                    $total = floatval($req->total) - floatval($exonerada);
+                                
+                                    $invoice = (new Invoice())
+                                        ->setUblVersion('2.1')
+                                        ->setTipoOperacion('0101') // Catalog. 51
+                                        ->setTipoDoc('03')
+                                        ->setSerie($req->serie)
+                                        ->setCorrelativo($req->numero)
+                                        ->setFechaEmision($date)
+                                        ->setTipoMoneda('PEN')
+                                        ->setClient($client)
+                                        ->setMtoOperGravadas(floatval($req->subtotal)) // Subtotal
+                                        ->setMtoIGV(floatval($req->igv))
+                                        ->setTotalImpuestos(floatval($req->igv))
+                                        ->setValorVenta(floatval($req->subtotal))//->setValorVenta(floatval($req->total))
+                                        ->setMtoImpVenta($total)
+                                        ->setCompany($company);
+                                    
+                                    $array = [];
+                                    $res = [];
+
+									for($i=0; $i<count($req->Id); $i++){
+                                        $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+                                        if($req->UnidMedida[$i] != 1)
+										{
+											if($productoSelect->CantidadTipo==0 || is_null($productoSelect->CantidadTipo))
+											{
+												$newCantidad=$req->Cantidad[$i];
+											}
+											else
+											{
+												$newCantidad=$req->Cantidad[$i]*$productoSelect->CantidadTipo;
+											}
+										}
+										else
+										{
+											$newCantidad=$req->Cantidad[$i];
+										}
+										//$subTotalItem = floatval($productoSelect->Precio/1.18);
+										//$newCantidad=
+										
+										
+										$valorUniDescuento=$req->Importe[$i]/$newCantidad;
+										$subTotalItem=floatval($valorUniDescuento/1.18);
+										
+                                        $igvItem = floatval($valorUniDescuento) - floatval($subTotalItem);
+                                        $mtoValorVenta = floatval(intval($newCantidad) * $subTotalItem);
+                                        $igvTotal = floatval(intval($newCantidad) * $igvItem);
+                                        $item = (new SaleDetail())
+                                        ->setCodProducto($req->Codigo[$i])
+                                        ->setUnidad($productoSelect->MedidaSunat)
+                                        ->setCantidad(intval($newCantidad))
+                                        ->setDescripcion($productoSelect->Descripcion)
+                                        ->setMtoBaseIgv(round($mtoValorVenta, 2))
+                                        ->setPorcentajeIgv(18.00) // 18%
+                                        ->setIgv($igvTotal)
+                                        ->setTipAfeIgv('10')
+                                        ->setTotalImpuestos(round($igvTotal, 2))
+                                        ->setMtoValorVenta(round($mtoValorVenta, 2))
+                                        ->setMtoValorUnitario(round($subTotalItem, 2))
+                                        ->setMtoPrecioUnitario(round($valorUniDescuento, 2));
+                                        array_push($array, $item);
+                                    }
+                                    
+                                    $convertirLetras = new NumeroALetras();
+                                    $importeLetras = $convertirLetras->convertir($total , 'soles');
+                                    $legend = (new Legend())
+                                        ->setCode('1000')
+                                        ->setValue($importeLetras);
+                                
+                                    $invoice->setDetails($array)
+                                            ->setLegends([$legend]);
+                                    
+                                    $xml_string = $see->getXmlSigned($invoice);
+                                    //dd($see->getFactory()->getLastXml());
+                                    $config->writeXml($invoice, $see->getFactory()->getLastXml(), 1);
+                                    
+                                    $_array = [];
+                                    $respuesta = 2;
+                                    $doc = new DOMDocument();
+                                    $doc->loadXML($xml_string);
+                                    $hash = $doc->getElementsByTagName('DigestValue')->item(0)->nodeValue;
+                                    $date = new DateTime();
+                                    $fecha = $date->format('Y-m-d');
+                                    $resumen = $empresa->Ruc.'|03|'.$req->serie.'|'.$req->numero.'|'.round($req->igv, 2).'|'.round($total, 2).'|'.$fecha.'|'.$cliente->CodigoSunat.'|'.$cliente->NumeroDocumento;
+                                    array_push($_array, $hash);
+                                    array_push($_array, $resumen);
+                                    array_push($_array, $respuesta);
+                                    
+									$res = $_array;
+						//----------------------------------------------------------------------------------------------------------------			
+									//return $_array;
+	                             								
+                                    //$res = $this->obtenerXMLBoleta($req);
+                                    //return $res;
+									
+									/* $array = ['IdCliente' => $idCliente, 'IdTipoMoneda' => $idTipoMoneda, 'Idsucursal' => $idSucursal, 'FechaCreacion' => $fechaConvertida, 'IdCreacion' => $idUsuario, 'IdTipoComprobante' => $idTipoComp, 'IdTipoSunat'=>$idTipoSunat,
+                                           'IdTipoPago' => $tipoPago, 'PlazoCredito' => $plazoCredito, 'MontoEfectivo' => $pagoEfectivo, 'IdTipoTarjeta' => $tipoTarjeta, 'NumeroTarjeta' => $numTarjeta, 'MontoTarjeta' => $pagoTarjeta, 
+                                            'Serie' => $serie, 'Numero' => $numero, 'Observacion' => $observacion, 'Subtotal' => $subtotal, 'Exonerada' => $exonerada, 'IGV' => $igv, 'Total' => $total, 'Resumen' => $resumen, 'Hash' => $hash, 'Nota' => 0, 'Guia' => 0, 'CodigoDoc'=>$codigoAceptado, 'Estado' => 'Boleta En Observacion', 'Interes'=>$req->interes];
+
+                                    DB::table('Tmp_ventas')->insert($array);
+
+                                    $venta = DB::table('Tmp_ventas')
+                                                        ->orderBy('IdVentas','desc')
+                                                        ->first();
+                                    $TmpidVenta = $venta->IdVentas;
+									
+									$ganancias = 0;
+					    			$cantidadRestada=0;
+					    			$cantidadVentaReal=1; // puse esto para contener si hay algun error
+					    			$bandTipo=0;
+                                    $bandGan=0;  //esto es para controlar la ganancia
+                                    for($i=0; $i<count($req->Id); $i++){
+                                        $producto = substr($req->Codigo[$i],0,3);
+                                        if($producto == 'PRO'){
+                                            $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+                                            if($req->UnidMedida[$i] == 1){
+                                                $cantidadRestada = (int) $productoSelect->Stock - (int) $req->Cantidad[$i];
+					    						$bandTipo=1;
+                        
+					    						$bandGan = $productoSelect->Precio - $productoSelect->Costo;
+					    						$newGanancia = ($bandGan * (int)$req->Cantidad[$i]) - $req->Descuento[$i];
+					    						
+					    						//$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * $req->Cantidad[$i]) - $req->Descuento[$i]);//$ganancias[$i] esto agrege para la burbuja de ganancia
+					    						
+                                            }else{
+                                                
+					    						if($productoSelect->CantidadTipo==0 || is_null($productoSelect->CantidadTipo))
+					    						{
+					    							//$newCantidad=$req->Cantidad[$i];
+					    							$cantidadRestada = (int) $productoSelect->Stock - ((int) $req->Cantidad[$i] * 1);
+					    							$cantidadVentaReal = (int) $req->Cantidad[$i] * 1;
+					    							$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * (1 * $req->Cantidad[$i])) - $req->Descuento[$i]);
+					    							$bandTipo=2;
+					    						}
+					    						else
+					    						{
+					    							//$newCantidad=$req->Cantidad[$i]*$productoSelect->CantidadTipo;
+					    							
+					    							$cantidadRestada = (int) $productoSelect->Stock - ((int) $req->Cantidad[$i] * (int) $productoSelect->CantidadTipo);
+					    							$cantidadVentaReal = (int) $req->Cantidad[$i] * (int) $productoSelect->CantidadTipo;
+					    							$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * ($productoSelect->CantidadTipo * $req->Cantidad[$i])) - $req->Descuento[$i]);
+					    							$bandTipo=2;
+					    						}
+                                            }										 
+                                        }
+					    				else
+					    				{
+					    					$newGanancia = $req->Importe[$i];//$ganancias[$i];
+					    				}
+					    				
+                                        $arrayRelacion = ['IdVentas' => $TmpidVenta, 'IdArticulo' => $req->Id[$i], 'Codigo' => $req->Codigo[$i], 'Detalle' => $req->Detalle[$i], 'Descuento' => $req->Descuento[$i], 'Cantidad' => $req->Cantidad[$i], 'CantidadReal' => $cantidadVentaReal, 'VerificaTipo'=>$bandTipo, 'Ganancia' => $newGanancia, 'Importe' => $req->Importe[$i],'TextUnidad' => $req->TextUnida[$i], 'PrecioUnidadReal' => $req->Precio[$i] ];
+                                        DB::table('Tmp_ventas_articulo')->insert($arrayRelacion);
+					    				$cantidadVentaReal = 1;
+					    				$bandTipo=0;
+					    				$bandGan =0;
+                                    } */
+									//--------------------------------------------
+                                }
+                                if($idTipoComp == 2){
+									
+                                    $idTipoSunat = '01';
+									$fecha = $req->fechaEmitida;
+                                    $date = DateTime::createFromFormat('Y-m-d',$fecha); 
+                                    
+                                    //$config = new config();
+                               //    	$see = $config->configuracion('https://demo-ose.nubefact.com/ol-ti-itcpe/billService?wsdl');
+                                
+                                    $loadDatos = new DatosController();
+                                    $cliente = $loadDatos->getClienteSelect($req->cliente);
+                                    
+                                    $client = new Client();
+                                    $client->setTipoDoc(strval($cliente->CodigoSunat))//agregado
+                                        ->setNumDoc($cliente->NumeroDocumento)
+                                        ->setRznSocial($cliente->RazonSocial);
+                                
+                                    // Emisor
+                                    $idSucursal = Session::get('idSucursal');
+                                    $idUsuario = Session::get('idUsuario');
+                                    $sucursal = $loadDatos->getSucursalSelect($idSucursal);
+                                    
+                                    $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+                                    $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+                                    
+                                    $address = new Address();
+                                    $address->setUbigueo($empresa->Ubigeo)
+                                            ->setDepartamento($empresa->Departamento)
+                                            ->setProvincia($empresa->Provincia)
+                                            ->setDistrito($empresa->Distrito)
+                                            ->setUrbanizacion('NONE')
+											->setCodLocal($sucursal->CodFiscal)
+                                            ->setDireccion($sucursal->DirPrin);
+                                         //   ->setDireccion($sucursal->Direccion);
+                                
+                                    $company = new Company();
+                                    $company->setRuc($empresa->Ruc)
+                                        ->setRazonSocial($empresa->Nombre)
+                                        ->setNombreComercial('NONE')
+                                        ->setAddress($address);
+                                
+                                    // Venta
+                                  	/*  $exonerada = $req->exonerada;
+                                    if($exonerada == '-'){
+                                        $exonerada = '0.00';
+                                    }  */
+									
+									$exonerada=0;
+									
+                                    $total = floatval($req->total) - floatval($exonerada);
+                                
+                                    $invoice = (new Invoice())
+                                        ->setUblVersion('2.1')
+                                        ->setTipoOperacion('0101') // Catalog. 51
+                                        ->setTipoDoc('01')
+                                        ->setSerie($req->serie)
+                                        ->setCorrelativo($req->numero)
+                                        ->setFechaEmision($date)
+                                        ->setTipoMoneda('PEN')
+                                        ->setClient($client)
+                                        ->setMtoOperGravadas(floatval($req->subtotal)) // Subtotal
+                                        ->setMtoIGV(floatval($req->igv))
+                                        ->setTotalImpuestos(floatval($req->igv))
+                                        ->setValorVenta(floatval($req->subtotal)) //->setValorVenta(floatval($req->total))
+										->setMtoImpVenta($total)
+                                        ->setCompany($company);
+                                    
+                                    $array = [];
+									$res = [];
+
+									for($i=0; $i<count($req->Id); $i++){
+                                        $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+										
+                                        if($req->UnidMedida[$i] != 1)
+										{
+											if($productoSelect->CantidadTipo==0 || is_null($productoSelect->CantidadTipo))
+											{
+												$newCantidad=$req->Cantidad[$i];
+											}
+											else
+											{
+												$newCantidad=$req->Cantidad[$i]*$productoSelect->CantidadTipo;
+											}
+										}
+										else
+										{
+											$newCantidad=$req->Cantidad[$i];
+										}
+										//$subTotalItem = floatval($productoSelect->Precio/1.18);
+										
+										$valorUniDescuento=$req->Importe[$i]/$newCantidad;
+										$subTotalItem=floatval($valorUniDescuento/1.18);
+										
+                                        $igvItem = floatval($valorUniDescuento) - floatval($subTotalItem);
+                                        $mtoValorVenta = floatval(intval($newCantidad) * floatval($subTotalItem));
+                                        $igvTotal = floatval(intval($newCantidad) * $igvItem);
+                                        $item = (new SaleDetail())
+                                        ->setCodProducto($req->Codigo[$i])
+                                        ->setUnidad($productoSelect->MedidaSunat)
+                                        ->setCantidad(intval($newCantidad))
+                                        ->setDescripcion($productoSelect->Descripcion)
+                                        ->setMtoBaseIgv(round($mtoValorVenta, 2))
+                                        ->setPorcentajeIgv(18.00) // 18%
+                                        ->setIgv(round($igvTotal, 2))
+                                        ->setTipAfeIgv('10')
+                                        ->setTotalImpuestos(round($igvTotal, 2))
+                                        ->setMtoValorVenta(round($mtoValorVenta, 2))
+                                        ->setMtoValorUnitario(round($subTotalItem, 2))
+                                        ->setMtoPrecioUnitario(round($valorUniDescuento, 2));
+                                        array_push($array, $item);
+                                    } 
+									
+                                    $convertirLetras = new NumeroALetras();
+                                    $importeLetras = $convertirLetras->convertir($total , 'soles');
+                                    $legend = (new Legend())
+                                        ->setCode('1000')
+                                        ->setValue($importeLetras);
+                                
+                                    $invoice->setDetails($array)
+                                            ->setLegends([$legend]);
+                                    
+                                    //$see->getXmlSigned($invoice);
+                                    //dd($see->getFactory()->getLastXml());
+                                    $xml_string = $see->getXmlSigned($invoice);
+                                    //dd($see->getFactory()->getLastXml());
+                                    $config->writeXml($invoice, $see->getFactory()->getLastXml(),1);
+                                    $result = $see->send($invoice);
+							//---------------------------------------------------------------------------------------------------------------------------------------------------------------		
+									/* $array = ['IdCliente' => $idCliente, 'IdTipoMoneda' => $idTipoMoneda, 'Idsucursal' => $idSucursal, 'FechaCreacion' => $fechaConvertida, 'IdCreacion' => $idUsuario, 'IdTipoComprobante' => $idTipoComp, 'IdTipoSunat'=>$idTipoSunat,
+                                           'IdTipoPago' => $tipoPago, 'PlazoCredito' => $plazoCredito, 'MontoEfectivo' => $pagoEfectivo, 'IdTipoTarjeta' => $tipoTarjeta, 'NumeroTarjeta' => $numTarjeta, 'MontoTarjeta' => $pagoTarjeta, 
+                                            'Serie' => $serie, 'Numero' => $numero, 'Observacion' => $observacion, 'Subtotal' => $subtotal, 'Exonerada' => $exonerada, 'IGV' => $igv, 'Total' => $total, 'Resumen' => $resumen, 'Hash' => $hash, 'Nota' => 0, 'Guia' => 0, 'CodigoDoc'=>$codigoAceptado, 'Estado' => 'Factura En Observacion', 'Interes'=>$req->interes];
+
+                                    DB::table('Tmp_ventas')->insert($array);
+
+                                    $venta = DB::table('Tmp_ventas')
+                                                        ->orderBy('IdVentas','desc')
+                                                        ->first();
+                                    $TmpidVenta = $venta->IdVentas;
+									
+									$ganancias = $this->actualizarStock($req);
+					    			$cantidadRestada=0;
+					    			$cantidadVentaReal=1; // puse esto para contener si hay algun error
+					    			$bandTipo=0;
+                                    $bandGan=0;  //esto es para controlar la ganancia
+                                    for($i=0; $i<count($req->Id); $i++){
+                                        $producto = substr($req->Codigo[$i],0,3);
+                                        if($producto == 'PRO'){
+                                            $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+                                            if($req->UnidMedida[$i] == 1){
+                                                $cantidadRestada = (int) $productoSelect->Stock - (int) $req->Cantidad[$i];
+					    						$bandTipo=1;
+                        
+					    						$bandGan = $productoSelect->Precio - $productoSelect->Costo;
+					    						$newGanancia = ($bandGan * (int)$req->Cantidad[$i]) - $req->Descuento[$i];
+					    						
+					    						//$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * $req->Cantidad[$i]) - $req->Descuento[$i]);//$ganancias[$i] esto agrege para la burbuja de ganancia
+					    						
+                                            }else{
+                                                
+					    						if($productoSelect->CantidadTipo==0 || is_null($productoSelect->CantidadTipo))
+					    						{
+					    							//$newCantidad=$req->Cantidad[$i];
+					    							$cantidadRestada = (int) $productoSelect->Stock - ((int) $req->Cantidad[$i] * 1);
+					    							$cantidadVentaReal = (int) $req->Cantidad[$i] * 1;
+					    							$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * (1 * $req->Cantidad[$i])) - $req->Descuento[$i]);
+					    							$bandTipo=2;
+					    						}
+					    						else
+					    						{
+					    							//$newCantidad=$req->Cantidad[$i]*$productoSelect->CantidadTipo;
+					    							
+					    							$cantidadRestada = (int) $productoSelect->Stock - ((int) $req->Cantidad[$i] * (int) $productoSelect->CantidadTipo);
+					    							$cantidadVentaReal = (int) $req->Cantidad[$i] * (int) $productoSelect->CantidadTipo;
+					    							$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * ($productoSelect->CantidadTipo * $req->Cantidad[$i])) - $req->Descuento[$i]);
+					    							$bandTipo=2;
+					    						}
+                                            }										 
+                                        }
+					    				else
+					    				{
+					    					$newGanancia = $req->Importe[$i];//$ganancias[$i];
+					    				}
+					    				
+                                        $arrayRelacion = ['IdVentas' => $TmpidVenta, 'IdArticulo' => $req->Id[$i], 'Codigo' => $req->Codigo[$i], 'Detalle' => $req->Detalle[$i], 'Descuento' => $req->Descuento[$i], 'Cantidad' => $req->Cantidad[$i], 'CantidadReal' => $cantidadVentaReal, 'VerificaTipo'=>$bandTipo, 'Ganancia' => $newGanancia, 'Importe' => $req->Importe[$i],'TextUnidad' => $req->TextUnida[$i], 'PrecioUnidadReal' => $req->Precio[$i] ];
+                                        DB::table('Tmp_ventas_articulo')->insert($arrayRelacion);
+					    				$cantidadVentaReal = 1;
+					    				$bandTipo=0;
+					    				$bandGan =0;
+                                    } */
+								//-------------------
+                                    if ($result->isSuccess()){
+                                        //$config->writeXml($invoice, $see->getFactory()->getLastXml());
+                                        $cdr = $result->getCdrResponse();
+                                        $config->writeCdr($invoice, $result->getCdrZip(), 1);
+                                        $config->showResponse($invoice, $cdr);
+                                        
+                                        $_array = [];
+                                        $respuesta = 1;
+										
+										$isAccetedCDR=$result->getCdrResponse()->isAccepted();
+										$descripcionCDR=$result->getCdrResponse()->getDescription();
+										$codeCDR=  $result->getCdrResponse()->getCode();
+										
+										$ver=$codeCDR.'-'.$descripcionCDR.'-'.$isAccetedCDR;//getCdrResponse()->getDescription();  //borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+                                        //$xml_string = $see->getXmlSigned($invoice);
+                                        $doc = new DOMDocument();
+                                        $doc->loadXML($xml_string);
+                                        $hash = $doc->getElementsByTagName('DigestValue')->item(0)->nodeValue;
+                                        $date = new DateTime();
+                                        $fecha = $date->format('Y-m-d');
+                                        $resumen = $empresa->Ruc.'|01|'.$req->serie.'|'.$req->numero.'|'.round($req->igv, 2).'|'.round($total, 2).'|'.$fecha.'|'.$cliente->CodigoSunat.'|'.$cliente->NumeroDocumento;
+                                        array_push($_array, $hash);
+                                        array_push($_array, $resumen);
+                                        array_push($_array, $respuesta);
+                                        array_push($_array, $codeCDR); //borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+                                        array_push($_array, $descripcionCDR); //borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+                                        array_push($_array, $isAccetedCDR); //borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+                                       // return $_array;
+                                    } else {
+                                        //dd($result);
+                                        $_array = [];
+                                        if($result->getError()->getCode() == 'HTTP'){
+                                            echo "<script language='javascript'>alert('Servicio inestable, intentelo en otro momento');</script>";
+                                            $respuesta = 2;
+											
+                                            $codeOp=-1;
+                                            $descripOp="";
+                                            $accepOp=-1;
+											
+											$doc = new DOMDocument();
+                                            $doc->loadXML($xml_string);
+                                            $hash = $doc->getElementsByTagName('DigestValue')->item(0)->nodeValue;
+                                            $date = new DateTime();
+                                            $fecha = $date->format('Y-m-d');
+                                            $resumen = $empresa->Ruc.'|01|'.$req->serie.'|'.$req->numero.'|'.round($req->igv, 2).'|'.round($total, 2).'|'.$fecha.'|'.$cliente->CodigoSunat.'|'.$cliente->NumeroDocumento;
+                                            array_push($_array, $hash);
+                                            array_push($_array, $resumen);
+                                            array_push($_array, $respuesta);
+                                            array_push($_array, $codeOp);
+                                            array_push($_array, $descripOp);
+                                            array_push($_array, $accepOp);
+                                           
+                                        }else{
+                                            //echo '<script language="javascript">alert("'.$result->getError()->getMessage().'");</script>';
+                                            $respuesta = 0;
+                                            $hash = '';
+
+											$descripcionError=$result->getError()->getMessage();
+											$codeError = $result->getError()->getCode();
+											$isAccetedError=-1;
+											
+											//$ver=$descripcionError.'-'.$codeError;  $result->getError();//borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+                                            $resumen = 'Error '.$result->getError()->getCode().': '.$result->getError()->getMessage();
+									//-----  return Response(['verificar','error '.$result->getError()->getCode().' verificara la valides de este Documento', $TmpidVenta]);
+ 
+                                            array_push($_array, $hash);
+                                            array_push($_array, $resumen);
+                                            array_push($_array, $respuesta);
+											array_push($_array, $codeError);//borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+											array_push($_array, $descripcionError);//borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+											array_push($_array, $isAccetedError);//borrarrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+                                        }
+                                       // return $_array;
+                                    }
+
+									//$res = $this->obtenerXMLFactura($req);
+                                    //return $res;
+									
+									$res = $_array;
+                                }
+
+                                if($res[2] == 0){
+                                    $bandera = 0;
+                                    $mensaje = $res[1];
+                                }else{
+                                    if($res[2] == 1){  //es  enviado y recibido......
+                                        
+										if($res[3]<100)
+										{
+											$codigoAceptado=$res[3];
+											$estado = 'Aceptado';
+											$mensaje = $res[4];
+										}
+										else if($res[3]>=100 &&  $res[3]<=1999)
+										{
+										//-------------------------------------
+											/* if($res[3]  ==  1033)
+											{
+												return Response(['verificar','Se debe aqui verificar la valides de este Documento ', $TmpidVenta]);
+											} */
+										//-----------------------------------------------
+											$bandera = 0;
+											$codigoAceptado=$res[3];
+											$estado = 'Excepcion';
+											$mensaje = $res[5].'-'.$res[4].'-'.$res[3];
+											
+										}
+										else if($res[3]>=2000 &&  $res[3]<=3999)
+										{
+											$noReduceStock=1;
+											$codigoAceptado=$res[3];
+											$estado = 'Rechazo';
+											$mensaje = $res[4];
+										}
+										else
+										{
+											$codigoAceptado=$res[3];
+											$estado = 'Observado';
+											$mensaje = $res[4];//'La Factura '.$serie.'-'.$numero.', Ha sido Aceptado';
+										}
+
+                                        //$mensaje = $res[3];  //'Se generó Factura y se envio a Sunat con éxito';
+                                    }
+                                    if($res[2] == 2){
+                                        $estado = 'Pendiente';
+										$codigoAceptado='-';
+                                        if(intval($idTipoComp) == 1){
+                                            $mensaje = 'Se generó Boleta y se guardo con éxito';//$res[1];
+                                        }else{
+                                            $mensaje = 'Se generó Factura pero no se pudo enviar a Sunat';
+                                        }
+                                    }
+                                    $hash = $res[0];
+                                    $resumen = $res[1];
+                                }
+                            }
+                            //dd($req);
+							
+							$exonerada = $req->exonerada;  //esto se puso aqui, por  que descuento =  exoneracion , y se  nesecita  guardar el total del descuento 
+                            if($exonerada == '-'){
+                                $exonerada = '0.00';
+                            }
+
+                            if($bandera == 1){
+                                $array = ['IdCliente' => $idCliente, 'IdTipoMoneda' => $idTipoMoneda, 'Idsucursal' => $idSucursal, 'FechaCreacion' => $fechaConvertida, 'IdCreacion' => $idUsuario, 'IdTipoComprobante' => $idTipoComp, 'IdTipoSunat'=>$idTipoSunat,
+                                           'IdTipoPago' => $tipoPago, 'PlazoCredito' => $plazoCredito, 'MontoEfectivo' => $pagoEfectivo, 'IdTipoTarjeta' => $tipoTarjeta, 'NumeroTarjeta' => $numTarjeta, 'MontoTarjeta' => $pagoTarjeta, 
+                                            'Serie' => $serie, 'Numero' => $numero, 'Observacion' => $observacion, 'Subtotal' => $subtotal, 'Exonerada' => $exonerada, 'IGV' => $igv, 'Total' => $total, 'Resumen' => $resumen, 'Hash' => $hash, 'Nota' => 0, 'Guia' => 0, 'CodigoDoc'=>$codigoAceptado, 'Estado' => $estado];
+
+                                DB::table('ventas')->insert($array);
+
+                                $venta = DB::table('ventas')
+                                                    ->orderBy('IdVentas','desc')
+                                                    ->first();
+                                $idVenta = $venta->IdVentas;
+
+                                if($tipoPago == 2){
+                                    $interes = $req->interes;
+                                    $this->guardarFechasPago($fecha, $plazoCredito, $idVenta, $total, $interes);
+                                }
+
+								if($noReduceStock==0)
+								{
+									$arrayCaja = ['IdCaja' => $caja->IdCaja, 'IdVentas' => $idVenta];
+                                	DB::table('caja_ventas')->insert($arrayCaja);
+								}
+                                
+                                $ganancias = $this->actualizarStock($req);
+								$cantidadRestada=0;
+								$cantidadVentaReal=1; // puse esto para contener si hay algun error
+								$bandTipo=0;
+                                $bandGan=0;  //esto es para controlar la ganancia
+                                for($i=0; $i<count($req->Id); $i++){
+                                    $producto = substr($req->Codigo[$i],0,3);
+                                    if($producto == 'PRO'){
+                                        $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+                                        if($req->UnidMedida[$i] == 1){
+                                            $cantidadRestada = (int) $productoSelect->Stock - (int) $req->Cantidad[$i];
+											$bandTipo=1;
+
+											$bandGan = $productoSelect->Precio - $productoSelect->Costo;
+											$newGanancia = ($bandGan * (int)$req->Cantidad[$i]) - $req->Descuento[$i];
+											
+											//$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * $req->Cantidad[$i]) - $req->Descuento[$i]);//$ganancias[$i] esto agrege para la burbuja de ganancia
+											
+                                        }else{
+                                            
+											if($productoSelect->CantidadTipo==0 || is_null($productoSelect->CantidadTipo))
+											{
+												//$newCantidad=$req->Cantidad[$i];
+												$cantidadRestada = (int) $productoSelect->Stock - ((int) $req->Cantidad[$i] * 1);
+												$cantidadVentaReal = (int) $req->Cantidad[$i] * 1;
+												$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * (1 * $req->Cantidad[$i])) - $req->Descuento[$i]);
+												$bandTipo=2;
+											}
+											else
+											{
+												//$newCantidad=$req->Cantidad[$i]*$productoSelect->CantidadTipo;
+												
+												$cantidadRestada = (int) $productoSelect->Stock - ((int) $req->Cantidad[$i] * (int) $productoSelect->CantidadTipo);
+												$cantidadVentaReal = (int) $req->Cantidad[$i] * (int) $productoSelect->CantidadTipo;
+												$newGanancia=$req->Importe[$i] - (($productoSelect->Costo * ($productoSelect->CantidadTipo * $req->Cantidad[$i])) - $req->Descuento[$i]);
+												$bandTipo=2;
+											}
+                                        }
+										
+										if($noReduceStock==0)
+										{
+											DB::table('articulo')
+                                                ->where('IdArticulo',$req->Id[$i])
+                                                ->update(['Stock' => $cantidadRestada]);
+												
+										
+									     	$kardex=array(	 
+							                  	'CodigoInterno'=>$productoSelect->CodigoInterno,
+									     		'fecha_movimiento'=>$fechaConvertida,
+							                  	'tipo_movimiento'=>1,
+							                  	'usuario_movimiento'=>$idUsuario,
+							                  	'documento_movimiento'=>$serie.'-'.$numero,
+							                  	'existencia'=>$cantidadRestada,
+							                  	'costo'=>1,
+							                  	'IdArticulo'=>$req->Id[$i],
+							                  	'IdSucursal'=>$idSucursal,
+							                  	'estado'=>1
+							                  );
+									     	DB::table('kardex')->insert($kardex);
+										}										 
+                                    }
+									else
+									{
+										$newGanancia = $req->Importe[$i];//$ganancias[$i];
+									}
+									
+                                    $arrayRelacion = ['IdVentas' => $idVenta, 'IdArticulo' => $req->Id[$i], 'Codigo' => $req->Codigo[$i], 'Detalle' => $req->Detalle[$i], 'Descuento' => $req->Descuento[$i], 'Cantidad' => $req->Cantidad[$i], 'CantidadReal' => $cantidadVentaReal, 'VerificaTipo'=>$bandTipo, 'Ganancia' => $newGanancia, 'Importe' => $req->Importe[$i],'TextUnidad' => $req->TextUnida[$i], 'PrecioUnidadReal' => $req->Precio[$i] ];
+                                    DB::table('ventas_articulo')->insert($arrayRelacion);
+									$cantidadVentaReal = 1;
+									$bandTipo=0;
+									$bandGan =0;
+                                }
+								//-----------------------------------------------------------									
+									/* $verificar_venta = DB::table('Tmp_ventas')
+                                                        ->where('Idsucursal',$idSucursal)
+                                                        ->where('IdCreacion',$idUsuario)
+                                                        ->where('Serie',$serie)
+                                                        ->where('Numero',$numero)
+                                                        ->first();
+									
+									if($verificar_venta)
+									{
+										$borrar_articulo=$verificar_venta->IdVentas;
+										DB::table('Tmp_ventas')
+												->where('IdVentas', $borrar_articulo)
+												->delete();
+										
+										DB::table('Tmp_ventas_articulo')
+												->where('IdVentas', $borrar_articulo)
+												->delete();
+									}  */
+								//--------------------------------------------------------------------
+                                return Response(['succes',$mensaje,$idVenta]);
+                            }else{
+                                return Response(['error',$mensaje]);
+                                //return redirect()->to('operaciones/ventas/realizar-venta')->with('error', $mensaje);
+                            }
+                        }else{
+                            return Response(['alert10','Quedan '.$stockSuficiente[2].' unidades en stock de : '.$stockSuficiente[1]]);
+                        }
+                    }
+                }
+            }else{
+                Session::flush();
+                return redirect('/')->with('out','Sesión de usuario Expirado');
+            }
+        } catch (Exception $ex){
+            echo $ex->getMessage();
+        }
+    }
+
+    public function store_backup(Request $req){
+        try{
+            if($req->session()->has('idUsuario')) {
+                if($req->ajax()){
+                    $idUsuario = Session::get('idUsuario');
+                    $serie = $req->serie;
+
+                    if($serie == null){
+                        return Response(['alert1','Por favor, completar serie y número correlativo']);
+                    }
+                    $numero = $req->numero;
+                    $idTipoComp = $req->idTipoComp;
+                    if($idTipoComp == 0){
+                        return Response(['alert2','Por favor, elegir Tipo de comprobante']);
+                        //return back()->with('error','Por favor, elegir Tipo de comprobante')->withInput($req->all());
+                    }
+                    $idCliente = $req->cliente;
+                    if($idCliente == 0){
+                        return Response(['alert3','Por favor, elegir Cliente']);
+                        //return back()->with('error','Por favor, elegir Cliente')->withInput($req->all());
+                    }
+                    if($req->Id == null){
+                        return Response(['alert4','Por favor, agrege productos o servicios']);
+                        //return back()->with('error','Por favor, agrege productos o servicios')->withInput($req->all());
+                    }
+                    $total = $req->total;
+                    $fecha = $req->fechaEmitida;
+                    if($fecha == null){
+                        return Response(['alert5','Por favor, ingresar fecha de venta']);
+                        //return back()->with('error','Por favor, ingresar fecha de venta');
+                    }
+                    
+                    $numero = $this->completarCeros($numero);
+                    $idSucursal = Session::get('idSucursal');
+                    $verificar = $this->verificarCodigo($serie, $numero, $idSucursal);
+                    if($verificar->Cantidad > 0){
+                        //return Response(['alert6','La Serie y Número ya existen']);
+                        //return back()->with('error','La Serie y Número ya existen');
+                        $ultimoCorrelativo = $this->ultimoCorrelativo($idUsuario, $idSucursal);
+                        $sumarCorrelativo = intval($ultimoCorrelativo->Numero) + 1;
+                        $numero = $this->completarCeros($sumarCorrelativo);
+                    }
+                    $date = DateTime::createFromFormat('Y-m-d',$fecha);
+                    $fechaConvertida = $date->format("Y-m-d H:i:s");
+                    $idTipoMoneda = 1;
+                    $subtotal = $req->subtotal;
+                    $exonerada = $req->exonerada;
+                    $observacion = $req->observacion;
+                    if($exonerada == '-'){
+                        $exonerada = '0.00';
+                    }
+                    $tipoPago = $req->tipoPago;
+                    if($tipoPago == 1){
+                        $plazoCredito = '';
+                        $pagoEfect = $req->pagoEfectivo;
+                        $tipoTarjeta = $req->tipoTarjeta;
+                        $numTarjeta = $req->numTarjeta;
+                        $pagoTarjeta = $req->pagoTarjeta;
+                        $vueltoEfectivo = $req->vueltoEfectivo;
+                        if(floatval($pagoTarjeta) > 0){
+                            if($numTarjeta == '' || $numTarjeta == null){
+                                return Response(['alert7','Completar Numero de Tarjeta']);
+                                /*return back()->with('error','Completar Numero de Tarjeta')
+                                            ->withInput($req->all());*/
+                            }
+                        }
+                        $pagoEfectivo = floatval($pagoEfect) - floatval($vueltoEfectivo);
+                        $pagoTotal = floatval($pagoEfectivo) + floatval($pagoTarjeta);
+                        $_pagoTotal = round($pagoTotal, 2);
+                        $_total = round($total, 2);
+                        if($_pagoTotal != $_total){
+                            return Response(['alert8','La suma de pago efectivo y pago con tarjeta debe ser igual al Importe Total']);
+                            /*return back()->with('error','La suma de pago efectivo y pago con tarjeta debe ser igual al Importe Total')
+                                         ->withInput($req->all());*/
+                        }
+                    }else{
+                        $plazoCredito = $req->plazoCredito;
+                        $pagoEfectivo = '';
+                        $tipoTarjeta = '';
+                        $numTarjeta = '';
+                        $pagoTarjeta = '';
+                    }
+                    $igv = $req->igv;
+                    $estado = 'Sin Valor Tributario';
+
+                    $loadDatos = new DatosController();
+                    $caja = $loadDatos->getCierreCaja($idSucursal, $idUsuario);
+                    if($caja == null){
+                        //return back()->with('caja','Abrir Caja antes de realizar una venta');
+                        return Response(['alert9','Abrir Caja antes de realizar una venta']);
+                        //echo "<script language='javascript'>alert('Abrir Caja antes de realizar una venta');window.location='../../caja/cierre-caja'</script>";
+                    }else{
+                        $stockSuficiente = $this->verificarStockSuficiente($req);
+                        
+                        if($stockSuficiente[0] == 1){
+                            $bandera = 1;
+                            $resumen = '';
+                            $hash = '';
+                            $mensaje = 'Se genero Ticket con éxito';
+                            if(intval($idTipoComp) < 3)
+                            {
+                                $res = $this->envioSunat($req);
+                                if($res[2] == 0){
+                                    $bandera = 0;
+                                    $mensaje = $res[1];
+                                }else{
+                                    if($res[2] == 1){
+                                        $estado = 'Aceptado';
+                                        $mensaje = 'Se generó Factura y se envio a Sunat con éxito';
+                                    }
+                                    if($res[2] == 2){
+                                        $estado = 'Pendiente';
+                                        if(intval($idTipoComp) == 1){
+                                            $mensaje = 'Se generó Boleta y se guardo con éxito';
+                                        }else{
+                                            $mensaje = 'Se generó Factura pero no se pudo enviar a Sunat';
+                                        }
+                                    }
+                                    $hash = $res[0];
+                                    $resumen = $res[1];
+                                }
+                            }
+                            //dd($req);
+                            if($bandera == 1){
+                                $array = ['IdCliente' => $idCliente, 'IdTipoMoneda' => $idTipoMoneda, 'Idsucursal' => $idSucursal, 'FechaCreacion' => $fechaConvertida, 'IdCreacion' => $idUsuario, 'IdTipoComprobante' => $idTipoComp, 
+                                           'IdTipoPago' => $tipoPago, 'PlazoCredito' => $plazoCredito, 'MontoEfectivo' => $pagoEfectivo, 'IdTipoTarjeta' => $tipoTarjeta, 'NumeroTarjeta' => $numTarjeta, 'MontoTarjeta' => $pagoTarjeta, 
+                                            'Serie' => $serie, 'Numero' => $numero, 'Observacion' => $observacion, 'Subtotal' => $subtotal, 'Exonerada' => $exonerada, 'IGV' => $igv, 'Total' => $total, 'Resumen' => $resumen, 'Hash' => $hash, 'Nota' => 0, 'Guia' => 0, 'Estado' => $estado];
+
+                                DB::table('ventas')->insert($array);
+
+                                $venta = DB::table('ventas')
+                                                    ->orderBy('IdVentas','desc')
+                                                    ->first();
+                                $idVenta = $venta->IdVentas;
+
+                                if($tipoPago == 2){
+                                    $interes = $req->interes;
+                                    $this->guardarFechasPago($fecha, $plazoCredito, $idVenta, $total, $interes);
+                                }
+
+                                $arrayCaja = ['IdCaja' => $caja->IdCaja, 'IdVentas' => $idVenta];
+                                DB::table('caja_ventas')->insert($arrayCaja);
+
+                                $ganancias = $this->actualizarStock($req);
+
+                                for($i=0; $i<count($req->Id); $i++){
+                                    $producto = substr($req->Codigo[$i],0,3);
+                                    if($producto == 'PRO'){
+                                        $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+                                        $cantidadRestada = (int) $productoSelect->Stock - (int) $req->Cantidad[$i];
+                                        DB::table('articulo')
+                                                ->where('IdArticulo',$req->Id[$i])
+                                                ->update(['Stock' => $cantidadRestada]);
+                                    }
+                                    $arrayRelacion = ['IdVentas' => $idVenta, 'IdArticulo' => $req->Id[$i], 'Codigo' => $req->Codigo[$i], 'Detalle' => $req->Detalle[$i], 'Descuento' => $req->Descuento[$i], 'Cantidad' => $req->Cantidad[$i], 'Ganancia' => $ganancias[$i], 'Importe' => $req->Importe[$i]];
+                                    DB::table('ventas_articulo')->insert($arrayRelacion);
+                                }
+                                
+                                return Response(['succes',$mensaje,$idVenta]);
+                            }else{
+                                return Response(['error',$mensaje]);
+                                //return redirect()->to('operaciones/ventas/realizar-venta')->with('error', $mensaje);
+                            }
+                        }else{
+                            return Response(['alert10','Quedan '.$stockSuficiente[2].' unidades en stock de : '.$stockSuficiente[1]]);
+                        }
+                    }
+                }
+            }else{
+                Session::flush();
+                return redirect('/')->with('out','Sesión de usuario Expirado');
+            }
+        } catch (Exception $ex){
+            echo $ex->getMessage();
+        }
+    }
+    
+    private function verificarStockSuficiente($req) {
+        $loadDatos = new DatosController();
+        $array = [];
+        for($i=0; $i<count($req->Id); $i++){
+            $producto = substr($req->Codigo[$i],0,3);
+            if($producto == 'PRO'){
+                $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+                if($req->Cantidad[$i] > $productoSelect->Stock){
+                    array_push($array, 0);
+                    array_push($array, $productoSelect->Descripcion);
+                    array_push($array, $productoSelect->Stock);
+                    return $array;
+                }
+            }
+        }
+        array_push($array, 1);
+        return $array;
+    }
+    
+    private function actualizarStock($req) {
+        $loadDatos = new DatosController();
+        $arrayGanancias = [];
+        for($i=0; $i<count($req->Id); $i++){
+            $producto = substr($req->Codigo[$i],0,3);
+            $ganancia = 0;
+            if($producto == 'PRO'){
+                $productoSelect = $loadDatos->getProductoStockSelect($req->Id[$i]);
+				
+				if(count($productoSelect) >=1)  //evitar el no encontrar y el cero
+		    	{
+		    		if($req->Cantidad[$i] > $productoSelect[0]->Cantidad){
+                    	$ganancia += (int) $productoSelect[0]->Cantidad * ( (float) $productoSelect[0]->Precio - (float) $productoSelect[0]->Costo);
+                        $resto = (int) $req->Cantidad[$i] - (int) $productoSelect[0]->Cantidad;
+                        DB::table('stock')
+                            ->where('IdStock', $productoSelect[0]->IdStock)
+                            ->update(['Cantidad' => 0]);
+                        if($resto > $productoSelect[1]->Cantidad){
+                            $ganancia += $productoSelect[1]->Cantidad * ( (float) $productoSelect[1]->Precio - (float) $productoSelect[1]->Costo);
+                            $resto = $resto - (int) $productoSelect[1]->Cantidad;
+                            DB::table('stock')
+                                ->where('IdStock', $productoSelect[1]->IdStock)
+                                ->update(['Cantidad' => 0]);
+                            if($resto > $productoSelect[2]->Cantidad){
+                                $ganancia += $productoSelect[2]->Cantidad * ( (float) $productoSelect[2]->Precio - (float) $productoSelect[2]->Costo);
+                                $dif = (int) $productoSelect[2]->Cantidad - (int) $req->Cantidad[$i];
+                                DB::table('stock')
+                                    ->where('IdStock', $productoSelect[0]->IdStock)
+                                    ->update(['Cantidad' => $dif]);
+                            }else{
+                                $ganancia += $resto * ( (float) $productoSelect[2]->Precio - (float) $productoSelect[2]->Costo);
+                                $dif = (int) $productoSelect[2]->Cantidad - $resto;
+                                DB::table('stock')
+                                    ->where('IdStock', $productoSelect[2]->IdStock)
+                                    ->update(['Cantidad' => $dif]);
+                                }
+                        }else{
+                            $ganancia += $resto * ( (float) $productoSelect[1]->Precio - (float) $productoSelect[1]->Costo);
+                            $dif = (int) $productoSelect[1]->Cantidad - $resto;
+                            DB::table('stock')
+                            ->where('IdStock', $productoSelect[1]->IdStock)
+                            ->update(['Cantidad' => $dif]);
+                        }
+                    }else{
+                        $ganancia += $req->Cantidad[$i] * ( (float) $productoSelect[0]->Precio - (float) $productoSelect[0]->Costo);
+                        $dif = (int) $productoSelect[0]->Cantidad - (float) $req->Cantidad[$i];
+                        DB::table('stock')
+                            ->where('IdStock', $productoSelect[0]->IdStock)
+                            ->update(['Cantidad' => $dif]);
+                    }
+                    $arrayGanancias[$i] = $ganancia;
+		    	}
+				
+            }else{
+                $arrayGanancias[$i] = ((int) $req->Cantidad[$i]* (float) $req->Ganancia[$i]) - (float)$req->Descuento[$i];
+            }
+        }
+        return($arrayGanancias);
+    }
+    
+    private function guardarFechasPago($fecha, $plazoCredito, $idVenta, $total, $interes){
+        $fechaInicio = DateTime::createFromFormat('Y-m-d',$fecha);
+        $fechaConvertidaInicio = $fechaInicio->format("Y-m-d");
+		
+		$plazoInteresTotal = $total + (($total/100)*$interes);
+		
+		$fechaConvertidaFinal = strtotime('+'.$plazoCredito.' day',strtotime($fechaConvertidaInicio));
+        $fechaConvertidaFinal = date('Y-m-d',$fechaConvertidaFinal);
+        $array = ['IdVenta' => $idVenta, 'FechaInicio' => $fechaConvertidaInicio, 'FechaUltimo' => $fechaConvertidaFinal, 'Importe' => $plazoInteresTotal, 'ImportePagado' => 0.00, 'DiasPasados' => 0, 'Estado' => 1];
+        DB::table('fecha_pago')->insert($array);
+		
+		/* $meses = 0;
+		$residuo = 0;
+		$plazo = $plazoCredito;
+		
+		$plazoCredito=ceil($plazoCredito/30); //ojo con esto
+
+	
+    	if($plazo > 30)
+    	{
+    
+    		$meses=floor($plazo/30);
+    		$residuo = $plazo%30;
+    	}
+    	else
+    	{
+    		$meses=0;
+    		$residuo=$plazo;
+    	}
+
+        $totalPlazo = floatval($total)/$plazoCredito;
+        $plazoInteresTotal = $totalPlazo + (($totalPlazo/100)*$interes);
+        $fechaConvertidaFinal = $fechaConvertidaInicio;
+        for($i=1; $i<=$meses; $i++){
+            $fechaInicial = $fechaConvertidaFinal;
+            $fechaConvertidaFinal = strtotime('+'.$i.' month',strtotime($fechaConvertidaInicio));
+            $fechaConvertidaFinal = date('Y-m-d',$fechaConvertidaFinal);
+            $array = ['IdVenta' => $idVenta, 'FechaInicio' => $fechaInicial, 'FechaUltimo' => $fechaConvertidaFinal, 'Importe' => $plazoInteresTotal, 'ImportePagado' => 0.00, 'DiasPasados' => 0, 'Estado' => 1];
+            DB::table('fecha_pago')->insert($array);
+        }
+		
+		if($residuo!=0)
+		{
+			$fechaInicial = $fechaConvertidaFinal;
+            $fechaConvertidaFinal = strtotime('+'.$residuo.' day',strtotime($fechaConvertidaFinal));
+            $fechaConvertidaFinal = date('Y-m-d',$fechaConvertidaFinal);
+            $array = ['IdVenta' => $idVenta, 'FechaInicio' => $fechaInicial, 'FechaUltimo' => $fechaConvertidaFinal, 'Importe' => $plazoInteresTotal, 'ImportePagado' => 0.00, 'DiasPasados' => 0, 'Estado' => 1];
+            DB::table('fecha_pago')->insert($array);
+		} */
+
+    }
+
+    public function searchProducto(Request $req) {
+        if($req->ajax()){
+            $loadDatos = new DatosController();
+            $idSucursal = Session::get('idSucursal');
+			      $optMarca = $req->sinMarca;
+            Session::put('text',$req->textoBuscar);
+            Session::put('optMarca',$req->sinMarca);
+
+			$cod_cliente = DB::table('sucursal')
+					   ->select('CodigoCliente')
+					   ->where('IdSucursal', $idSucursal)
+					   ->first();
+
+			$sucPrincipal = DB::table('sucursal')
+					   ->select('IdSucursal')
+					   ->where('CodigoCliente',$cod_cliente->CodigoCliente)
+					   ->where('Principal', 1)
+					   ->first();
+
+		if($optMarca==1){
+        if($sucPrincipal->IdSucursal == $idSucursal)
+	       {
+          	$articulos = $loadDatos->getBuscarProdNoMarcas($req->textoBuscar, $idSucursal);
+	       }
+	       else
+	       {
+		         $articulos=$loadDatos->buscarAjaxProdNoMarcaSucursal($req->textoBuscar, $idSucursal);
+		     }
+			}
+			else{
+				if($sucPrincipal->IdSucursal == $idSucursal)
+	         	{
+                	$articulos = $loadDatos->getBuscarProductosVentas($req->textoBuscar, $idSucursal);
+	         	}
+	         	else
+	         	{
+		    		$articulos=$loadDatos->buscarAjaxProdSucursal($req->textoBuscar, $idSucursal);
+		    	}
+			}
+
+            return Response($articulos);
+        }
+    }
+    
+    public function searchServicio(Request $req) {
+        if($req->ajax()){
+            $loadDatos = new DatosController();
+            $idSucursal = Session::get('idSucursal');
+            Session::put('text',$req->textoBuscar);
+            $articulos = $loadDatos->getBuscarServiciosVentas($req->textoBuscar, $idSucursal);
+            return Response($articulos);
+        }
+    }
+    
+    public function searchCodigoProducto(Request $req){
+        if($req->ajax()){
+            $loadDatos = new DatosController();
+            $idSucursal = Session::get('idSucursal');
+            $articulos = $loadDatos->getBuscarCodigoProductoVentas($req->codigoBusqueda, $idSucursal);
+            return Response($articulos);
+        }
+    }
+	
+	public function porcentajeDescuento(Request $req) {
+        if($req->ajax()){
+            $loadDatos = new DatosController();
+            $idProducto = $req->idProducto;
+            $descuentos = $loadDatos->getProductoSelect($idProducto);
+            return Response([$descuentos]);
+        }
+    }
+    
+    public function verFacturaGenerada(Request $req, $id){
+        if($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        $loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        //dd($ventaSelect);
+		$idUsuario = Session::get('idUsuario');
+        $permisos = $loadDatos->getPermisos($idUsuario);
+		
+		$subpermisos=$loadDatos->getSubPermisos($idUsuario);
+		$subniveles=$loadDatos->getSubNiveles($idUsuario);
+		$idSucursal = Session::get('idSucursal');
+		
+		if($ventaSelect->IdTipoPago==2)
+		{
+			$fechaHoy = $loadDatos->getDateTime();
+        	$cobranzasTotales = $loadDatos->getCobranzasTotales($idSucursal, $fechaHoy);
+       		 //dd($cobranzasTotales);
+        	$this->actualizarFechasPasados($idSucursal, $cobranzasTotales);
+		}
+		
+        $numeroCerosIzquierda = $this->completarCeros($ventaSelect->Numero);
+        $fecha = date_create($ventaSelect->FechaCreacion);
+        $formatoFecha = date_format($fecha, 'd-m-Y');
+        $formatoHora = date_format($fecha, 'H:i A');
+        $items = $loadDatos->getItemsVentas($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $modulosSelect = $loadDatos->getModulosSelect($usuarioSelect->CodigoCliente);
+        $array = ['ventaSelect' => $ventaSelect, 'items' => $items, 'permisos' => $permisos, 'numeroCeroIzq' => $numeroCerosIzquierda, 'formatoFecha' => $formatoFecha, 'formatoHora' => $formatoHora,'modulosSelect' => $modulosSelect, 'subpermisos'=>$subpermisos, 'subniveles'=>$subniveles];
+        return view('operaciones/ventas/ventas/facturaGenerada', $array)->with('status','Se registro venta exitosamente');
+    }
+	
+	public function obtenerFacturaGenerada(Request $req, $id)
+	{
+	 	if($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+		
+		$loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        $idUsuario = Session::get('idUsuario');
+		$idSucursal = Session::get('idSucursal');
+		
+        $permisos = $loadDatos->getPermisos($idUsuario);
+		
+		$subpermisos=$loadDatos->getSubPermisos($idUsuario);
+		$subniveles=$loadDatos->getSubNiveles($idUsuario);
+		
+        $numeroCerosIzquierda = $this->completarCeros($ventaSelect->Numero);
+        $fecha = date_create($ventaSelect->FechaCreacion);
+        $formatoFecha = date_format($fecha, 'd-m-Y');
+        $formatoHora = date_format($fecha, 'H:i A');
+        $items = $loadDatos->getItemsVentas($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+		
+		/*********************************mio*************************************/
+		$empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+		/**********************************************************************/
+		/* 
+        $modulosSelect = $loadDatos->getModulosSelect($usuarioSelect->CodigoCliente);
+        $array = ['ventaSelect' => $ventaSelect, 'items' => $items, 'permisos' => $permisos, 'numeroCeroIzq' => $numeroCerosIzquierda, 'formatoFecha' => $formatoFecha, 'formatoHora' => $formatoHora,'modulosSelect' => $modulosSelect];
+        return view('operaciones/ventas/ventas/obtenerFacturaGenerada', $array)->with('status','Se registro venta exitosamente');
+		 */
+        $convertirLetras = new NumeroALetras();
+        $importeLetras = $convertirLetras->convertir($ventaSelect->Total , 'soles');
+        $numeroCerosIzquierda = $this->completarCeros($ventaSelect->Numero);
+        $resumen = $ventaSelect->Resumen;
+        $hash = $ventaSelect->Hash;
+
+        $array = ['items' =>$items, 'numeroCeroIzq' => $numeroCerosIzquierda, 'ventaSelect' => $ventaSelect, 'resumen' => $resumen, 'hash' => $hash,
+                    'formatoFecha' => $formatoFecha, 'formatoHora' => $formatoHora, 'importeLetras' => $importeLetras, 'empresa' => $empresa, 'subpermisos'=>$subpermisos, 'subniveles'=>$subniveles];
+
+		return view('operaciones/ventas/ventas/obtenerFacturaGenerada', $array)->with('status','Se registro venta exitosamente');
+	}
+    
+    public function imprimirPDF(Request $req, $id) {
+        if ($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        $pdf = $this->generarPDF($req, $req->selectImpre, $id);
+        $loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        $rucEmpresa = $empresa->Ruc;
+        $numero = $ventaSelect->Numero;
+        $serie = $ventaSelect->Serie;
+        if($ventaSelect->IdTipoComprobante == 1){
+            $idDoc = 03;
+        }
+        if($ventaSelect->IdTipoComprobante == 2){
+            $idDoc = 01;
+        }
+        if($ventaSelect->IdTipoComprobante == 3){
+            $idDoc = 12;
+        }
+        return $pdf->stream($rucEmpresa.'-'.$idDoc.'-'.$serie.'-'.$numero.'.pdf');
+    }
+    
+    public function descargarPDF(Request $req, $id) {
+        if ($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        $pdf = $this->generarPDF($req, 1, $id);
+        $loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        $rucEmpresa = $empresa->Ruc;
+        $numeroCerosIzquierda = $this->completarCeros($ventaSelect->Numero);
+        $serie = $ventaSelect->Serie;
+        if($ventaSelect->IdTipoComprobante == 1){
+            $idDoc = '03';
+        }
+        if($ventaSelect->IdTipoComprobante == 2){
+            $idDoc = '01';
+        }
+        if($ventaSelect->IdTipoComprobante == 3){
+            $idDoc = '12';
+        }
+        return $pdf->download($rucEmpresa.'-'.$idDoc.'-'.$serie.'-'.$numeroCerosIzquierda.'.pdf');
+    }
+    
+    public function descargarXML(Request $req, $id){
+        if ($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        $loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        $rucEmpresa = $empresa->Ruc;
+        $serie = $ventaSelect->Serie;
+        $numero= $ventaSelect->Numero;
+        $idTipoComprobante = $ventaSelect->IdTipoComprobante;
+        $cod = $serie.'-'.$numero;
+        if($idTipoComprobante == 1){
+            $file = $rucEmpresa.'-03-'.$cod;
+        }else{
+            $file = $rucEmpresa.'-01-'.$cod;
+        }
+        return response()->download(public_path().'/RespuestaSunat/FacturasBoletas/'.$file.'.xml');
+    }
+    
+    public function descargarCDR(Request $req, $id){
+        if ($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        $loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        $rucEmpresa = $empresa->Ruc;
+        $serie = $ventaSelect->Serie;
+        $numero= $ventaSelect->Numero;
+        $idTipoComprobante = $ventaSelect->IdTipoComprobante;
+        $cod = $serie.'-'.$numero;
+        if($idTipoComprobante == 1){
+            $file = 'R-'.$rucEmpresa.'-03-'.$cod;
+        }else{
+            $file = 'R-'.$rucEmpresa.'-01-'.$cod;
+        }
+        return response()->download(public_path().'/RespuestaSunat/FacturasBoletas/'.$file.'.zip');
+    }
+    
+    public function enviarCorreo(Request $req, $id) {
+        if ($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        $loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        $nombreEmpresa = $empresa->Nombre;
+        $rucEmpresa = $empresa->Ruc;
+        $numero = $ventaSelect->Numero;
+        $serie = $ventaSelect->Serie;
+        $cod = $serie.'-'.$numero;
+        if($ventaSelect->IdTipoComprobante == 1){
+            $idDoc = '03';
+            $file = $rucEmpresa.'-03-'.$cod;
+        }
+        if($ventaSelect->IdTipoComprobante == 2){
+            $idDoc = '01';
+            $file = $rucEmpresa.'-01-'.$cod;
+        }
+        if($ventaSelect->IdTipoComprobante == 3){
+            $idDoc = '12';
+            $file = $rucEmpresa.'-12-'.$cod;
+        }
+        $pdf = $this->generarPDF($req, 1, $id);
+        file_put_contents($rucEmpresa.'-'.$idDoc.'-'.$serie.'-'.$numero.'.pdf',$pdf->output());
+        
+        $mail = new PHPMailer();  
+        //$mail->isSMTP();                                     // Set mailer to use SMTP
+        $mail->Host = 'mail.mifacturita.pe';                     // Specify main and backup SMTP servers
+        //$mail->SMTPAuth = true;                               // Enable SMTP authentication
+        $mail->Username = 'facturacionelectronica@mifacturita.pe';             // SMTP username
+        $mail->Debugoutput = 'html';
+        $mail->Password = '@MiFacturita123';                        // SMTP password
+        $mail->SMTPSecure = 'ssl';                            // Enable TLS encryption, `ssl` also accepted
+        $mail->Port = 465;                                    // TCP port to connect to
+        $mail->From = 'facturacionelectronica@mifacturita.pe';
+        $mail->FromName = 'TELEPROCESOS DIGITALES QUEFACILITO S.A.C. - Facturación Electrónica';
+        $mail->addAddress($req->correo, 'Comprobante');     // Add a recipient
+
+        $mail->isHTML(true);         
+        $mail->CharSet = 'UTF-8';// Set email format to HTML
+        $mail->Subject = 'Envío de comprobante';
+        $mail->addAttachment($rucEmpresa.'-'.$idDoc.'-'.$serie.'-'.$numero.'.pdf');
+        //$mail->msgHTML('Hola: '.$req->cliente.', Te estamos enviando adjunto el comprobante ('.$req->comprobante.'.pdf) de la compra que hiciste en BroadCast Perú');
+        if($ventaSelect->IdTipoComprobante == 1){
+            $tipo = 'BOLETA ELECTRÓNICA';
+            $mail->addAttachment(public_path().'/RespuestaSunat/FacturasBoletas/'.$file.'.xml');
+        }
+        if($ventaSelect->IdTipoComprobante == 2){
+            $tipo = 'FACTURA ELECTRÓNICA';
+            $mail->addAttachment(public_path().'/RespuestaSunat/FacturasBoletas/'.$file.'.xml');
+        }
+        if($ventaSelect->IdTipoComprobante == 3){
+            $tipo = 'TICKET PRE-VENTA';
+        }
+        //$numeroCerosIzquierda = $this->completarCeros($ventaSelect->Numero);
+        $fecha = date_create($ventaSelect->FechaCreacion);
+        $formatoFecha = date_format($fecha, 'd/m/Y');
+        $mail->msgHTML('<table width="100%">'
+                        . '<tr>'
+                            . '<td style="border: 1px solid #000;">'
+                                . '<div align="center" style="background-color: #CCC">'
+                                    . '<img width="150px" style="margin:15px" src="'.$empresa->Imagen.'">'
+                                    . '<img width="150px" style="margin:15px" src="https://s3-us-west-2.amazonaws.com/2019mifacturita/1558678972.png">'
+                                . '</div>'
+                                . '<div style="margin-bottom:20px;margin-left:10px">'
+                                    . '<p>Estimado(a),</p>'
+                                . '</div>'
+                                . '<div style="margin-bottom:20px;margin-left:10px">'
+                                    . '<p>'.$req->cliente.'</p>'
+                                . '</div>'
+                                . '<div style="margin-bottom:10px;margin-left:10px">'
+                                    . '<p>Por encargo del emisor <span style="font-weight: bold;">'.$nombreEmpresa.'</span>, nos es grato informar que el documento electrónico ya se encuentra disponible con los siguientes datos:</p>'
+                                . '</div>'
+                                . '<hr style="border: 0.5px solid #000;">'
+                                . '<div style="margin-bottom:20px;margin-left:30px">'
+                                    . '<p><span style="font-weight: bold;">Tipo: '.$tipo.'</span></p>'
+                                    . '<p><span style="font-weight: bold;">Número: '.$ventaSelect->Serie.'-'.$numero.'</span></p>'
+                                    . '<p><span style="font-weight: bold;">RUC / DNI: '.$rucEmpresa.'</span></p>'
+                                    . '<p><span style="font-weight: bold;">Fecha Emisión: '.$formatoFecha.'</span></p>'
+                                    . '<p><span style="font-weight: bold;">Monto Total: '.$ventaSelect->Total.'</span></p>'
+                                . '</div>'
+                                . '<hr style="border: 0.5px solid #000;">'
+                                . '<div style="margin-bottom:20px;margin-left:10px">'
+                                    . '<p>Los comprobantes también podrán ser consultados en el enlace: <a href="http://mifacturita.pe/ERP/">www.mifacturita.pe</a>, ingresando mediante su usuario o utilizando nuestro acceso anónimo.</p>'
+                                . '</div>'
+                                . '<hr style="border: 0.5px solid #000;">'
+                                . '<div style="margin-bottom:20px;margin-left:10px">'
+                                    . '<p><span style="font-weight: bold;">Atentamente</span></p>'
+                                    . '<p><span style="font-weight: bold;">AGRADECEREMOS NO RESPONDER ESTE CORREO</span></p>'
+                                    . '<p><span style="font-weight: bold;">Si deseas ser Emisor Electrónico contáctanos o escríbenos al correo informes@mifacturita.pe</span></p>'
+                                . '</div>'
+                            . '</td>'
+                        . '</tr>'
+                      . '</table>');
+        
+        $enviado =$mail->send();
+        if($enviado){
+            return back()->with('status','Se envio correo con éxito');
+        }else{ 
+            return back()->with('error','No se pudo enviar correo');
+        }
+    }
+    
+    private function generarPDF($req, $tipo, $id) {
+        if ($req->session()->has('idUsuario')) {
+            $idUsuario = Session::get('idUsuario');
+        }else{
+            Session::flush();
+            return redirect('/')->with('out','Sesión de usuario Expirado');
+        }
+        
+        $loadDatos = new DatosController();
+        $ventaSelect = $loadDatos->getVentaselect($id);
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        $fecha = date_create($ventaSelect->FechaCreacion);
+        $formatoFecha = date_format($fecha, 'd/m/Y');
+        $formatoHora = date_format($fecha, 'H:i A');
+        $convertirLetras = new NumeroALetras();
+        $importeLetras = $convertirLetras->convertir($ventaSelect->Total , 'soles');
+        $numeroCerosIzquierda = $this->completarCeros($ventaSelect->Numero);
+        $resumen = $ventaSelect->Resumen;
+        $hash = $ventaSelect->Hash;
+        $items = $loadDatos->getItemsVentas($id);
+        $array = ['items' =>$items, 'numeroCeroIzq' => $numeroCerosIzquierda, 'ventaSelect' => $ventaSelect, 'resumen' => $resumen, 'hash' => $hash,
+                    'formatoFecha' => $formatoFecha, 'formatoHora' => $formatoHora, 'importeLetras' => $importeLetras, 'empresa' => $empresa];
+        view()->share($array);
+        if($tipo == 1){
+            $pdf = PDF::loadView('ventasPDF')->setPaper('a4','portrait');
+            //$pdf = PDF::loadView('ventasPDF')->setPaper(array(0,0,595.28,841.89));
+        }
+        if($tipo == 2){
+            $pdf = PDF::loadView('ventasPDFA5')->setPaper('a5','portrait');
+        }
+        if($tipo == 3){
+            $pdf = PDF::loadView('ventasTicket')->setPaper(array(0,0,107,600));
+        }
+        return $pdf;
+    }
+    
+    private function verificarCodigo($serie, $numero, $idSucursal){
+        try{
+            $resultado = DB::table('ventas')
+                        ->select(DB::raw("count(IdVentas) as Cantidad"))
+                        ->where('Serie', $serie)
+                        ->where('Numero', $numero)
+                        ->where('IdSucursal', $idSucursal)
+                        ->first();
+            return $resultado;
+        } catch (Exception $ex) {
+            echo $ex->getMessage();
+        }
+    }
+    
+    private function ultimoCorrelativo($idUsuario, $idSucursal) {
+        try{
+            $resultado = DB::table('ventas')
+                        ->where('IdCreacion', $idUsuario)
+                        ->where('IdSucursal', $idSucursal)
+                        ->orderBy('IdVentas', 'desc')
+                        ->first();
+            return $resultado;
+        } catch (Exception $ex) {
+            echo $ex->getMessage();
+        }
+    }
+    
+    private function completarCeros($numero){
+        $numeroConCeros = str_pad($numero, 8, "0", STR_PAD_LEFT);
+        return $numeroConCeros;
+    }
+    
+    public function consultarProvincias(Request $req) {
+        if($req->ajax()){
+            $idDep = $req->departamento;
+            $loadDatos = new DatosController();
+            $provincias = $loadDatos->getProvincias($idDep);
+            return Response($provincias);
+        }
+    }
+    
+    public function consultarDistritos(Request $req) {
+        if($req->ajax()){
+            $idPro = $req->provincia;
+            $loadDatos = new DatosController();
+            $distritos = $loadDatos->getDistritos($idPro);
+            return Response($distritos);
+        }
+    }
+    
+    public function crearCliente(Request $req){
+        if($req->ajax()){
+			$idSucursal = Session::get('idSucursal');
+            if($req->nombre == ''){
+                return Response('Nombre es obligatorio');
+            }
+            if($req->numDoc == ''){
+                return Response('Número de Documento es obligatorio');
+            }
+        /*  if($req->telefono == ''){
+                return Response('Teléfono es obligatorio');
+            } */
+            if($req->email == ''){
+                return Response('Email es obligatorio');
+            }
+            if($req->departamento == 0){
+                return Response('Asignar departamento para el cliente');
+            }
+            if($req->provincia == 0){
+                return Response('Asignar provincia para el cliente');
+            }
+            if($req->distrito == 0){
+                return Response('Asignar distrito para el cliente');
+            }
+            $tipoDoc = $req->tipoDoc;
+            $numDoc = $req->numDoc;
+            if($tipoDoc == 1){
+                if(strlen($numDoc) != 8){
+                    return Response('El DNI tiene que tener 8 dígitos');
+                }
+            }
+            if($tipoDoc == 2){
+                if(strlen($numDoc) != 11){
+                    return Response('El RUC tiene que tener 11 dígitos');
+                }
+            }
+            if($tipoDoc == 3){
+                if(strlen($numDoc) != 12){
+                    return Response('La CEDULA tiene que tener 12 dígitos');
+                }
+            }
+			
+			if($tipoDoc < 3)
+			{
+				$documento = DB::table('cliente')
+			 				->where('IdTipoDocumento', $tipoDoc)
+			 				->where('NumeroDocumento', $numDoc)
+							->where('IdSucursal', $idSucursal)
+							->where('Estado', 'E')
+                            ->first();
+							
+                if(count($documento) >= 1)
+	        	{
+	        		 return Response('El Numero de  Documento ya existe en nuestros registros');
+	        	}
+			}
+			
+            $loadDatos = new DatosController();
+            $fecha = $loadDatos->getDateTime();
+            $idUsuario = Session::get('idUsuario');
+            $nombre = $req->nombre;
+            $razonSocial = $req->razSocial;
+            $direccion = $req->direccion;
+            $telefono = $req->telefono;
+            $email = $req->email;
+            $estado = 'E';
+            
+            $array = ['IdTipoDocumento' => $tipoDoc, 'IdSucursal' => $idSucursal, 'FechaCreacion' => $fecha, 'IdCreacion' => $idUsuario, 'Nombre' => $nombre, 'RazonSocial' => $razonSocial, 'NumeroDocumento' => $numDoc,
+                    'Ubigeo' => $req->distrito, 'Direccion' => $direccion, 'Telefono' => $telefono, 'Email' => $email, 'Estado' => $estado];
+            DB::table('cliente')->insert($array);
+            
+            $cliente = DB::table('cliente')
+                        ->where('Estado', 'E')
+                        ->orderBy('IdCliente', 'desc')
+                        ->get();
+            
+            return Response($cliente);
+        }
+    }
+    
+    public function paginationProductos(Request $req){
+        if($req->ajax()){
+            $idSucursal = Session::get('idSucursal');
+            $text = Session::get('text');
+            $optMarca = Session::get('optMarca');
+            $loadDatos = new DatosController();
+
+						$cod_cliente = DB::table('sucursal')
+					   ->select('CodigoCliente')
+					   ->where('IdSucursal', $idSucursal)
+					   ->first();
+
+						 $sucPrincipal = DB::table('sucursal')
+					   ->select('IdSucursal')
+					   ->where('CodigoCliente',$cod_cliente->CodigoCliente)
+					   ->where('Principal', 1)
+					   ->first();
+
+					if($optMarca==1){
+					   if($sucPrincipal->IdSucursal == $idSucursal)
+	           	{
+		    	  		$productos = $loadDatos->getProductosPaginationNoMarca($idSucursal, $text);
+	           	}
+	           	else
+	           	{
+		    	  		$productos = $loadDatos->paginarAjaxProdSucursalNoMarca($idSucursal, $text);
+		    	  	}
+				  }
+					else{
+						 if($sucPrincipal->IdSucursal == $idSucursal)
+						 {
+						 	$productos = $loadDatos->getProductosPagination($idSucursal, $text);
+						 }
+						 else
+						 {
+						 	$productos = $loadDatos->paginarAjaxProdSucursal($idSucursal, $text);
+						 }
+					}
+            return Response($productos);
+        }
+    }
+    
+    public function paginationServicios(Request $req) {
+        if($req->ajax()){
+            $idSucursal = Session::get('idSucursal');
+            $text2 = Session::get('text');
+            $loadDatos = new DatosController();
+            $servicios = $loadDatos->getServiciosPagination($idSucursal, $text2);
+            return Response($servicios);
+        }
+    }
+    
+    protected function envioSunat($req) {
+
+		if($req->tipoComprobante == 1){
+            $res = $this->obtenerXMLBoleta($req);
+            return $res;
+        }
+        if($req->tipoComprobante == 2){
+            $res = $this->obtenerXMLFactura($req);
+            return $res;
+        }
+        
+    }
+    
+    public function consultarDoc(Request $req) {
+        if($req->ajax()){
+            $idDoc = $req->idDoc;
+            $numDoc = $req->numDoc;
+            $datos = new Sunat();
+            if($idDoc == 3){
+                return Response(array(0 => $numDoc));
+            }
+            $search = $datos->search($numDoc);
+            if($search->success == true ){
+                if($idDoc == 1){
+                    $data = array(
+                        0 => $search->result->razon_social
+                    );
+                }
+                if($idDoc == 2){
+                    $data = array( 
+                        0 => $search->result->razon_social,
+                        1 => $search->result->nombre_comercial,
+                        2 => $search->result->direccion
+                    );
+                }
+                
+                return Response($data);
+            }else{
+                return Response(array());
+            }
+            
+        }
+    }
+    
+    protected function obtenerXMLFactura($req) {
+        $fecha = $req->fechaEmitida;
+        $date = DateTime::createFromFormat('Y-m-d',$fecha); 
+        
+        $config = new config();
+       	$see = $config->configuracion(SunatEndpoints::FE_BETA);
+
+        $loadDatos = new DatosController();
+        $cliente = $loadDatos->getClienteSelect($req->cliente);
+        
+        $client = new Client();
+        $client->setTipoDoc(strval($cliente->CodigoSunat))//agregado
+            ->setNumDoc($cliente->NumeroDocumento)
+            ->setRznSocial($cliente->RazonSocial);
+
+        // Emisor
+        $idSucursal = Session::get('idSucursal');
+        $idUsuario = Session::get('idUsuario');
+        $sucursal = $loadDatos->getSucursalSelect($idSucursal);
+        
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        
+        $address = new Address();
+        $address->setUbigueo($empresa->Ubigeo)
+                ->setDepartamento($empresa->Departamento)
+                ->setProvincia($empresa->Provincia)
+                ->setDistrito($empresa->Distrito)
+                ->setUrbanizacion('NONE')
+                ->setDireccion($sucursal->Direccion);
+
+        $company = new Company();
+        $company->setRuc($empresa->Ruc)
+            ->setRazonSocial($empresa->Nombre)
+            ->setNombreComercial('NONE')
+            ->setAddress($address);
+
+        // Venta
+        $exonerada = $req->exonerada;
+        if($exonerada == '-'){
+            $exonerada = '0.00';
+        }
+        $total = floatval($req->total) - floatval($exonerada);
+
+        $invoice = (new Invoice())
+            ->setUblVersion('2.1')
+            ->setTipoOperacion('0101') // Catalog. 51
+            ->setTipoDoc('01')
+            ->setSerie($req->serie)
+            ->setCorrelativo($req->numero)
+            ->setFechaEmision($date)
+            ->setTipoMoneda('PEN')
+            ->setClient($client)
+            ->setMtoOperGravadas(floatval($req->subtotal)) // Subtotal
+            ->setMtoIGV(floatval($req->igv))
+            ->setTotalImpuestos(floatval($req->igv))
+            ->setValorVenta(floatval($req->total))
+            ->setMtoImpVenta($total)
+            ->setCompany($company);
+        
+        $array = [];
+        
+        for($i=0; $i<count($req->Id); $i++){
+            //$producto = substr($req->Codigo[$i],0,3);
+            $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+            $subTotalItem = floatval($productoSelect->Precio/1.18);
+            $igvItem = floatval($productoSelect->Precio) - floatval($subTotalItem);
+            $mtoValorVenta = floatval(intval($req->Cantidad[$i]) * $subTotalItem);
+            $igvTotal = floatval(intval($req->Cantidad[$i]) * $igvItem);
+            $item = (new SaleDetail())
+            ->setCodProducto($req->Codigo[$i])
+            ->setUnidad($productoSelect->MedidaSunat)
+            ->setCantidad(intval($req->Cantidad[$i]))
+            ->setDescripcion($productoSelect->Descripcion)
+            ->setMtoBaseIgv($mtoValorVenta)
+            ->setPorcentajeIgv(18.00) // 18%
+            ->setIgv($igvTotal)
+            ->setTipAfeIgv('10')
+            ->setTotalImpuestos($igvTotal)
+            ->setMtoValorVenta($mtoValorVenta)
+            ->setMtoValorUnitario($subTotalItem)
+            ->setMtoPrecioUnitario($productoSelect->Precio);
+            array_push($array, $item);
+        }
+        
+        $convertirLetras = new NumeroALetras();
+        $importeLetras = $convertirLetras->convertir($total , 'soles');
+        $legend = (new Legend())
+            ->setCode('1000')
+            ->setValue($importeLetras);
+
+        $invoice->setDetails($array)
+                ->setLegends([$legend]);
+        
+        //$see->getXmlSigned($invoice);
+        //dd($see->getFactory()->getLastXml());
+        $xml_string = $see->getXmlSigned($invoice);
+        //dd($see->getFactory()->getLastXml());
+        $config->writeXml($invoice, $see->getFactory()->getLastXml(),1);
+        $result = $see->send($invoice);
+        if ($result->isSuccess()) {
+            //$config->writeXml($invoice, $see->getFactory()->getLastXml());
+            $cdr = $result->getCdrResponse();
+            $config->writeCdr($invoice, $result->getCdrZip(), 1);
+            $config->showResponse($invoice, $cdr);
+            
+            $_array = [];
+            $respuesta = 1;
+            //$xml_string = $see->getXmlSigned($invoice);
+            $doc = new DOMDocument();
+            $doc->loadXML($xml_string);
+            $hash = $doc->getElementsByTagName('DigestValue')->item(0)->nodeValue;
+            $date = new DateTime();
+            $fecha = $date->format('Y-m-d');
+            $resumen = $empresa->Ruc.'|01|'.$req->serie.'|'.$req->numero.'|'.round($req->igv, 2).'|'.round($total, 2).'|'.$fecha.'|'.$cliente->CodigoSunat.'|'.$cliente->NumeroDocumento;
+            array_push($_array, $hash);
+            array_push($_array, $resumen);
+            array_push($_array, $respuesta);
+            return $_array;
+        } else {
+            //dd($result);
+            $_array = [];
+            if($result->getError()->getCode() == 'HTTP'){
+                echo "<script language='javascript'>alert('Servicio inestable, intentelo en otro momento');</script>";
+                $respuesta = 2;
+                $doc = new DOMDocument();
+                $doc->loadXML($xml_string);
+                $hash = $doc->getElementsByTagName('DigestValue')->item(0)->nodeValue;
+                $date = new DateTime();
+                $fecha = $date->format('Y-m-d');
+                $resumen = $empresa->Ruc.'|01|'.$req->serie.'|'.$req->numero.'|'.round($req->igv, 2).'|'.round($total, 2).'|'.$fecha.'|'.$cliente->CodigoSunat.'|'.$cliente->NumeroDocumento;
+                array_push($_array, $hash);
+                array_push($_array, $resumen);
+                array_push($_array, $respuesta);
+            }else{
+                //echo '<script language="javascript">alert("'.$result->getError()->getMessage().'");</script>';
+                $respuesta = 0;
+                $hash = '';
+                $resumen = 'Error '.$result->getError()->getCode().': '.$result->getError()->getMessage();
+                array_push($_array, $hash);
+                array_push($_array, $resumen);
+                array_push($_array, $respuesta);
+            }
+            return $_array;
+        }
+    }
+    
+    protected function obtenerXMLBoleta($req) {
+
+		$fecha = $req->fechaEmitida;
+        $date = DateTime::createFromFormat('Y-m-d',$fecha);
+        
+        $config = new config();
+        $see = $config->configuracion(SunatEndpoints::FE_BETA);
+        $loadDatos = new DatosController();
+        $cliente = $loadDatos->getClienteSelect($req->cliente);
+        
+        $client = new Client();
+        $client->setTipoDoc(strval($cliente->CodigoSunat))//agregado
+            ->setNumDoc($cliente->NumeroDocumento)
+            ->setRznSocial($cliente->Nombre);
+        
+        // Emisor
+        $idSucursal = Session::get('idSucursal');
+        $idUsuario = Session::get('idUsuario');
+        $sucursal = $loadDatos->getSucursalSelect($idSucursal);
+        
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+        
+        $address = new Address();
+        $address->setUbigueo($empresa->Ubigeo)
+                ->setDepartamento($empresa->Departamento)
+                ->setProvincia($empresa->Provincia)
+                ->setDistrito($empresa->Distrito)
+                ->setUrbanizacion('NONE')
+                ->setDireccion($sucursal->Direccion);
+
+        $company = new Company();
+        $company->setRuc($empresa->Ruc)
+            ->setRazonSocial($empresa->Nombre)
+            ->setNombreComercial('NONE')
+            ->setAddress($address);
+        
+        $exonerada = $req->exonerada;
+        if($exonerada == '-'){
+            $exonerada = '0.00';
+        }
+        $total = floatval($req->total) - floatval($exonerada);
+
+        $invoice = (new Invoice())
+            ->setUblVersion('2.1')
+            ->setTipoOperacion('0101') // Catalog. 51
+            ->setTipoDoc('03')
+            ->setSerie($req->serie)
+            ->setCorrelativo($req->numero)
+            ->setFechaEmision($date)
+            ->setTipoMoneda('PEN')
+            ->setClient($client)
+            ->setMtoOperGravadas(floatval($req->subtotal)) // Subtotal
+            ->setMtoIGV(floatval($req->igv))
+            ->setTotalImpuestos(floatval($req->igv))
+            ->setValorVenta(floatval($req->total))
+            ->setMtoImpVenta($total)
+            ->setCompany($company);
+        
+        $array = [];
+        
+        for($i=0; $i<count($req->Id); $i++){
+            $productoSelect = $loadDatos->getProductoSelect($req->Id[$i]);
+            $subTotalItem = floatval($productoSelect->Precio/1.18);
+            $igvItem = floatval($productoSelect->Precio) - floatval($subTotalItem);
+            $mtoValorVenta = floatval(intval($req->Cantidad[$i]) * $subTotalItem);
+            $igvTotal = floatval(intval($req->Cantidad[$i]) * $igvItem);
+            $item = (new SaleDetail())
+            ->setCodProducto($req->Codigo[$i])
+            ->setUnidad($productoSelect->MedidaSunat)
+            ->setCantidad(intval($req->Cantidad[$i]))
+            ->setDescripcion($productoSelect->Descripcion)
+            ->setMtoBaseIgv($mtoValorVenta)
+            ->setPorcentajeIgv(18.00) // 18%
+            ->setIgv($igvTotal)
+            ->setTipAfeIgv('10')
+            ->setTotalImpuestos($igvTotal)
+            ->setMtoValorVenta($mtoValorVenta)
+            ->setMtoValorUnitario($subTotalItem)
+            ->setMtoPrecioUnitario($productoSelect->Precio);
+            array_push($array, $item);
+        }
+        
+        $convertirLetras = new NumeroALetras();
+        $importeLetras = $convertirLetras->convertir($total , 'soles');
+        $legend = (new Legend())
+            ->setCode('1000')
+            ->setValue($importeLetras);
+
+        $invoice->setDetails($array)
+                ->setLegends([$legend]);
+        
+        $xml_string = $see->getXmlSigned($invoice);
+        //dd($see->getFactory()->getLastXml());
+        $config->writeXml($invoice, $see->getFactory()->getLastXml(), 1);
+        
+        $_array = [];
+        $respuesta = 2;
+        $doc = new DOMDocument();
+        $doc->loadXML($xml_string);
+        $hash = $doc->getElementsByTagName('DigestValue')->item(0)->nodeValue;
+        $date = new DateTime();
+        $fecha = $date->format('Y-m-d');
+        $resumen = $empresa->Ruc.'|03|'.$req->serie.'|'.$req->numero.'|'.round($req->igv, 2).'|'.round($total, 2).'|'.$fecha.'|'.$cliente->CodigoSunat.'|'.$cliente->NumeroDocumento;
+        array_push($_array, $hash);
+        array_push($_array, $resumen);
+        array_push($_array, $respuesta);
+        return $_array;
+
+        //dd($config);
+        /*$result = $see->send($invoice);
+        $config->writeXml($invoice, $see->getFactory()->getLastXml());
+        
+        if ($result->isSuccess()) {
+            $cdr = $result->getCdrResponse();
+            $config->writeCdr($invoice, $result->getCdrZip());
+            $config->showResponse($invoice, $cdr);
+            
+            $_array = [];
+            $xml_string = $see->getXmlSigned($invoice);
+            $doc = new DOMDocument();
+            $doc->loadXML($xml_string);
+            $hash = $doc->getElementsByTagName('DigestValue')->item(0)->nodeValue;
+            $date = new DateTime();
+            $fecha = $date->format('Y-m-d');
+            $resumen = '20000000001|03|'.$req->serie.'|'.$req->numero.'|'.round($req->igv, 2).'|'.round($total, 2).'|'.$fecha.'|'.$cliente->CodigoSunat.'|20000000001';
+            array_push($_array, $hash);
+            array_push($_array, $resumen);
+            return $_array;
+            
+        } else {
+            echo "<script language='javascript'>alert('error al procesar solicitud, intentelo más tarde');window.location='realizar-venta'</script>";
+            //return back()->with('error',$result->getError())->withInput($req->all());
+        }*/
+    }
+
+
+    protected function validateVenta(Request $request) {
+        $this->validate($request, [
+            'serie' => 'required',
+            'numero' => 'required'
+        ]);
+    }
+	
+	private function actualizarFechasPasados($idSucursal, $noVencidos) {
+        for($i=0; $i<count($noVencidos); $i++){
+            DB::table('fecha_pago')
+            ->join('ventas','fecha_pago.IdVenta', '=', 'ventas.IdVentas')
+            ->where('ventas.IdSucursal',$idSucursal)
+            ->where('fecha_pago.Estado', '!=', 2)
+            ->where('fecha_pago.IdFechaPago',$noVencidos[$i]->IdFechaPago)
+            ->update(['DiasPasados' => $noVencidos[$i]->Dias]);
+        }
+        //dd($noVencidos);
+        /*DB::table('fecha_pago')
+            ->join('ventas','fecha_pago.IdVenta', '=', 'ventas.IdVentas')
+            ->where('ventas.IdSucursal',$idSucursal)
+            ->update(['Stock' => $cantidadRestada]);*/
+    }
+	
+	public function validarDocumento(Request $req, $id)
+	{
+		//$fecha = $req->fechaEmitida;
+        //$date = DateTime::createFromFormat('Y-m-d',$fecha);
+        
+        //$config = new config();
+       // $see = $config->configuracion(SunatEndpoints::FE_BETA);
+        //dd($id);
+		$loadDatos = new DatosController();
+
+        // Emisor
+        $idSucursal = Session::get('idSucursal');
+        $idUsuario = Session::get('idUsuario');
+        $sucursal = $loadDatos->getSucursalSelect($idSucursal);
+        
+        $usuarioSelect = $loadDatos->getUsuarioSelect($idUsuario);
+        $empresa = $loadDatos->getDatosEmpresa($usuarioSelect->CodigoCliente);
+
+		
+		$documento=DB::table('Tmp_ventas')
+            ->where('IdVentas', $id)
+            ->first();
+	
+		//$service = $this->getCdrStatusService($empresa->Ruc.$empresa->UsuarioSol, $empresa->ClaveSol);
+		$service = $this->getCdrStatusService('20000000001MODDATOS', 'MODDATOS');
+		$tipo="$documento->IdTipoSunat";
+		$serie="$documento->Serie";
+		
+		$arguments = [
+            $fields['ruc']=$empresa->Ruc,
+            $fields['tipo']=$tipo,
+            $fields['serie']=$serie,
+            intval($fields['numero']=$documento->Numero)
+    	];
+
+		$result = $service->getStatusCdr(...$arguments);
+        dd($result);	
+		if ($result->getCdrZip()) {
+            
+			$isAccetedCDR=$result->getCdrResponse()->isAccepted();
+			$descripcionCDR=$result->getCdrResponse()->getDescription();
+			$codeCDR=  $result->getCdrResponse()->getCode();
+			
+		    if(intval($codeCDR) < 100)
+		    {
+				$codigoAceptado=$codeCDR;
+		    	$estado = 'Aceptado';
+		    	$mensaje = $descripcionCDR;
+				$tipoMensaje='Factura Aceptado';
+				//$filename = 'R-'.implode('-', $arguments).'.zip';
+            	//savedFile($filename, $result->getCdrZip());
+				//aqui
+				$this->saveValidateDocument($id, $estado);
+		    }
+		    else if(intval($codeCDR) >=100 &&  intval($codeCDR) <=1999)
+		    {
+		    	$bandExceccion=1;
+				$bandBaja=1;
+				$codigoAceptado=$codeCDR;
+		    	$estado = 'Excepcion';
+		    	//$mensaje = $descripcionCDR;
+				$tipoMensaje='Baja Pendiente';
+				$mensaje="El Documento Tiene el error ".$codigoAceptado."  -  ".$descripcionCDR." - Este Numero de Documento puede usarse";
+		    }
+		    else if(intval($codeCDR) >=2000 && intval($codeCDR) <=3999)
+		    {
+				$bandBaja=1;
+		    	$codigoAceptado=$codeCDR;
+		    	$estado = 'Baja Rechazo';
+		    	//$mensaje = $descripcionCDR;
+				$tipoMensaje='Baja Pendiente';
+				$mensaje="El Documento Tiene el error ".$codigoAceptado."  -  ".$descripcionCDR." - No debe usarse  este  Numero de Documento";
+		    }
+		    else
+		    {
+		    	$codigoAceptado=$codeCDR;
+		    	$estado = 'Aceptada (Observada)';
+		    	$mensaje = $descripcionCDR;
+				$tipoMensaje='Aceptado';
+				
+				$this->saveValidateDocument($id, $estado);
+		    }
+		}
+		else
+		{
+			$mensaje="El Documento no esta  registrado en  Sunat  ......Comuniquese con la  Administracion";
+			return $mensaje;
+		}	
+	}
+	
+	private function getCdrStatusService($user, $password)
+	{
+        $ws = new SoapClient(SunatEndpoints::FE_CONSULTA_CDR.'?wsdl');
+        $ws->setCredentials($user, $password);
+       
+        $service = new ConsultCdrService();
+        $service->setClient($ws);
+       
+        return $service;
+	}
+	
+	private function saveValidateDocument($id, $_estado)
+	{
+		$loadDatos = new DatosController();
+		
+		$documento=DB::table('Tmp_ventas')
+            ->where('IdVentas', $id)
+            ->first();
+		
+		$idCliente = $documento->IdCliente;
+		$idTipoMoneda = $documento->IdTipoMoneda; 
+		$idSucursal = $documento->Idsucursal; 
+		$fechaConvertida = $documento->FechaCreacion; 
+		$idUsuario = $documento->IdCreacion; 
+		$idTipoComp = $documento->IdTipoComprobante; 
+		$idTipoSunat = $documento->IdTipoSunat;
+        $tipoPago = $documento->IdTipoPago; 
+		$plazoCredito = $documento->PlazoCredito; 
+		$pagoEfectivo = $documento->MontoEfectivo; 
+		$tipoTarjeta = $documento->IdTipoTarjeta; 
+		$numTarjeta = $documento->NumeroTarjeta; 
+		$pagoTarjeta = $documento->MontoTarjeta; 
+        $serie = $documento->Serie;
+		$numero = $documento->Numero; 
+		$observacion = $documento->Observacion; 
+		$subtotal = $documento->Subtotal; 
+		$exonerada = $documento->Exonerada; 
+		$igv = $documento->IGV; 
+		$total = $documento->Total; 
+		$resumen = $documento->Resumen; 
+		$hash = $documento->Hash; 
+		$nota = $documento->Nota;
+		$guia = $documento->Guia;
+		$codigoAceptado = $documento->CodigoDoc; 
+		$estado = $_estado;
+		$interes = $documento->Interes;
+
+		$caja = $loadDatos->getCierreCaja($idSucursal, $idUsuario);
+
+		$array = ['IdCliente' => $idCliente, 'IdTipoMoneda' => $idTipoMoneda, 'Idsucursal' => $idSucursal, 'FechaCreacion' => $fechaConvertida, 'IdCreacion' => $idUsuario, 'IdTipoComprobante' => $idTipoComp, 'IdTipoSunat'=>$idTipoSunat,
+                  'IdTipoPago' => $tipoPago, 'PlazoCredito' => $plazoCredito, 'MontoEfectivo' => $pagoEfectivo, 'IdTipoTarjeta' => $tipoTarjeta, 'NumeroTarjeta' => $numTarjeta, 'MontoTarjeta' => $pagoTarjeta, 
+                  'Serie' => $serie, 'Numero' => $numero, 'Observacion' => $observacion, 'Subtotal' => $subtotal, 'Exonerada' => $exonerada, 'IGV' => $igv, 'Total' => $total, 'Resumen' => $resumen, 'Hash' => $hash, 'Nota' => $nota, 'Guia' => $guia, 'CodigoDoc'=>$codigoAceptado, 'Estado' => $estado];
+	
+		DB::table('ventas')->insert($array);
+
+        $venta = DB::table('ventas')
+                    ->orderBy('IdVentas','desc')
+                    ->first();
+        $TmpidVenta = $venta->IdVentas;
+		
+        if($tipoPago == 2){
+			//$interes = $req->interes;
+           	$this->guardarFechasPago($fechaConvertida, $plazoCredito, $idVenta, $total, $interes);
+        }
+
+		$arrayCaja = ['IdCaja' => $caja->IdCaja, 'IdVentas' => $idVenta];
+        DB::table('caja_ventas')->insert($arrayCaja);
+		
+		
+		$venta_articulo=DB::table('Tmp_ventas_articulo')
+            ->where('IdVentas', $id)
+            ->get();
+			
+		if(count($venta_articulo)  >= 1)
+		{
+			$cantidadRestada=0;
+	    	$cantidadVentaReal=1; // puse esto para contener si hay algun error
+	    	$bandTipo=0;
+            $bandGan=0;  //esto es para controlar la ganancia
+            foreach($venta_articulo as $articulo)
+	    	{
+				$producto = substr($articulo->Codigo,0,3);
+                if($producto == 'PRO'){
+					$productoSelect = $loadDatos->getProductoSelect($articulo->IdArticulo);
+					$cantidadRestada = (int) $productoSelect->Stock - $articulo->Cantidad;
+					
+					DB::table('articulo')
+                        ->where('IdArticulo',$articulo->IdArticulo)
+                        ->update(['Stock' => $cantidadRestada]);
+						
+					$kardex=array(	 
+				        'CodigoInterno'=>$productoSelect->CodigoInterno,
+				   		'fecha_movimiento'=>$fechaConvertida,
+				        'tipo_movimiento'=>1,
+				        'usuario_movimiento'=>$idUsuario,
+				        'documento_movimiento'=>$serie.'-'.$numero,
+				        'existencia'=>$cantidadRestada,
+				        'costo'=>1,
+				        'IdArticulo'=>$articulo->IdArticulo,
+				        'IdSucursal'=>$idSucursal,
+				        'estado'=>1
+				              );
+				   	DB::table('kardex')->insert($kardex);	
+				
+				}
+				
+				$idVenta = $TmpidVenta;
+	    		$idArticulo = $articulo->IdArticulo;
+				$codigo = $articulo->Codigo;
+				$detalle = $articulo->Detalle;
+				$descuento = $articulo->Descuento;
+				$cantidad = $articulo->Cantidad;
+				$cantidadVentaReal = $articulo->CantidadReal;
+				$bandTipo = $articulo->VerificaTipo;
+				$newGanancia = $articulo->Ganancia;
+				$importe = $articulo->Importe;
+				$textUnida = $articulo->TextUnidad;
+				$precio = $articulo->PrecioUnidadReal;
+				
+	    		$arrayRelacion = ['IdVentas' => $idVenta, 'IdArticulo' => $idArticulo, 'Codigo' => $codigo, 'Detalle' => $detalle, 'Descuento' => $descuento, 'Cantidad' => $cantidad, 'CantidadReal' => $cantidadVentaReal, 'VerificaTipo'=>$bandTipo, 'Ganancia' => $newGanancia, 'Importe' => $importe,'TextUnidad' => $textUnida, 'PrecioUnidadReal' => $precio ];
+            	DB::table('ventas_articulo')->insert($arrayRelacion);
+            }
+
+	    		$verificar_venta = DB::table('Tmp_ventas')
+                                      ->where('Idsucursal',$idSucursal)
+                                      ->where('IdCreacion',$idUsuario)
+                                      ->where('Serie',$serie)
+                                      ->where('Numero',$numero)
+                                      ->first();
+	    		
+	    		if($verificar_venta)
+	    		{
+	    			$borrar_articulo=$verificar_venta->IdVentas;
+	    			DB::table('Tmp_ventas')
+	    					->where('IdVentas', $borrar_articulo)
+	    					->delete();
+	    			
+	    			DB::table('Tmp_ventas_articulo')
+	    					->where('IdVentas', $borrar_articulo)
+	    					->delete();
+	    		}
+        
+                return Response(['succes',$mensaje,$idVenta]);
+	    	
+		}
+	}
+}

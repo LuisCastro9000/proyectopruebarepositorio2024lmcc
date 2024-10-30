@@ -1,0 +1,14 @@
+/* estilos nuevos de elementos */
+
+.badge-orange-lighten{
+    color:rgb(246, 133, 26);
+    background-color: rgba(246, 133, 26,.18);
+}
+
+.cursor-pointer{
+    cursor: pointer;
+}
+
+.z-index-1000{
+    z-index: 1000;
+}

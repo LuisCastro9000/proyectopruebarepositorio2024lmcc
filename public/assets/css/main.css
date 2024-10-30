@@ -1,0 +1,461 @@
+/* Nuevos estilos vista compras Productos agregados por Rois*/
+.custom-control-label {
+    padding-top: 5px !important;
+}
+
+.label-texto {
+    padding-top: 4px !important;
+}
+
+/* Fin */
+
+/****** Desabilitar elementos *****/
+.disabled-elemento {
+    pointer-events: none;
+    cursor: default;
+}
+/*******FIN *********/
+
+/****** Switch style *****/
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/*******FIN Switch*********/
+
+.table-responsive-sm {
+    display: table;
+}
+
+div.dataTables_wrapper div.dataTables_length select {
+    width: 46px;
+    display: inline-block;
+}
+
+.dataTables_wrapper table.dataTable td {
+    padding: 0.75em 0.75em;
+}
+
+#tableVentas_wrapper div.dataTables_wrapper div.dataTables_length label {
+    display: none;
+}
+
+.fileUpload {
+    overflow: hidden;
+    right: 0;
+    bottom: 0;
+}
+
+.fileUpload input.upload {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0 auto;
+    padding: 0;
+    font-size: 20px;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.btnCambiarFotoPerfil {
+    background-color: #17bff0;
+    border-radius: 4px;
+    border: 0px solid #002266;
+    color: white;
+    padding: 5px;
+    cursor: pointer;
+    transition: 0.5s;
+    margin: 0 auto;
+}
+
+.btnCambiarFotoPerfil:hover {
+    background-color: #0d9dc7;
+}
+
+.bg-celeste {
+    background-color: #ccf2ff;
+}
+
+.bg-plomo {
+    background-color: #ebebe0;
+}
+
+.form-control[readonly] {
+    color: rgba(73, 80, 87, 0.8);
+}
+
+.flecha-disabled {
+    width: 100%;
+    height: 60px;
+    position: relative;
+    background: rgb(180, 180, 180);
+    margin: 5px;
+}
+
+.flecha-disabled:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid white;
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-disabled:before {
+    content: "";
+    position: absolute;
+    right: -20px;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid rgb(180, 180, 180);
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-abierto {
+    width: 100%;
+    height: 60px;
+    position: relative;
+    background: rgba(255, 0, 0, 0.750);
+    margin: 5px;
+}
+
+.flecha-abierto:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid white;
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-abierto:before {
+    content: "";
+    position: absolute;
+    right: -20px;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid rgba(255, 0, 0, 0.750);
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-enproceso {
+    width: 100%;
+    height: 60px;
+    position: relative;
+    background: rgb(247, 128, 0, 0.750);
+    margin: 5px;
+}
+
+.flecha-enproceso:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid white;
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-enproceso:before {
+    content: "";
+    position: absolute;
+    right: -20px;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid rgb(247, 128, 0, 0.750);
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-finalizado {
+    width: 100%;
+    height: 60px;
+    position: relative;
+    background: rgba(255, 255, 0, 0.750);
+    margin: 5px;
+}
+
+.flecha-finalizado:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid white;
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-finalizado:before {
+    content: "";
+    position: absolute;
+    right: -20px;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid rgba(255, 255, 0, 0.750);
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-cerrado {
+    width: 100%;
+    height: 60px;
+    position: relative;
+    background: rgb(0, 201, 7, 0.750);
+    margin: 5px;
+}
+
+.flecha-cerrado:after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid white;
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.flecha-cerrado:before {
+    content: "";
+    position: absolute;
+    right: -20px;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 20px solid rgb(0, 201, 7, 0.750);
+    border-top: 30px solid transparent;
+    border-bottom: 30px solid transparent;
+}
+
+.bg-abierto {
+    width: 140px;
+    background: rgba(255, 0, 0, 0.750);
+    padding: 5px 15px 5px 15px;
+    margin: 2.5px;
+    color: white;
+    border-radius: 5px;
+}
+
+.bg-enProceso {
+    width: 140px;
+    background: rgb(247, 128, 0, 0.750);
+    padding: 5px 15px 5px 15px;
+    margin: 2.5px;
+    color: black;
+    border-radius: 5px;
+}
+
+.bg-finalizado {
+    width: 140px;
+    background: rgba(255, 255, 0, 0.750);
+    padding: 5px 15px 5px 15px;
+    margin: 2.5px;
+    color: black;
+    border-radius: 5px;
+}
+
+.bg-cerrado {
+    width: 140px;
+    background: rgb(0, 201, 7, 0.750);
+    padding: 5px 15px 5px 15px;
+    margin: 2.5px;
+    color: white;
+    border-radius: 5px;
+}
+
+.bg-cerrado {
+    width: 140px;
+    background: rgb(0, 201, 7, 0.750);
+    padding: 5px 15px 5px 15px;
+    margin: 2.5px;
+    color: white;
+    border-radius: 5px;
+}
+
+.bg-baja{
+    width: 140px;
+    background: rgb(128, 128, 128, 0.750);
+    padding: 5px 15px 5px 15px;
+    margin: 2.5px;
+    color: white;
+    border-radius: 5px;
+}
+
+.bg-excel {
+    width: 90px;
+    background: rgb(0, 80, 20, 0.850);
+    padding: 6px 10px 6px 10px;
+    color: white;
+    border-radius: 5px;
+}
+
+.btn-autocontrol-naranja {
+    background-color: rgb(246, 133, 26);
+}
+
+.color-icon {
+    color: #ffff;
+}
+
+.btn-enviar-bajas{
+    color: #f55959;
+}
+
+.btn-enviar-bajas:hover {
+    color: #ff0404;
+}
+
+
+@media (max-width: 575.98px) {
+    .w-50 {
+        width: 75% !important;
+    }
+    .widget-body {
+        padding: 10px 10px;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.next,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.previous {
+        border: 0;
+        display: none;
+    }
+    .pagination {
+        display: inline-flex;
+    }
+    span {
+        font-size: 12px;
+    }
+    .text-right {
+        text-align: inherit;
+    }
+    
+    #canvas{
+        width:270px; 
+        height:270px;
+    }
+
+    #canvasCarro{
+        width:270px; 
+        height:270px;
+    }
+}
+
+/* Small devices (landscape phones, 576px and up) */
+@media (min-width: 576px) and (max-width: 767.98px) { 
+    #canvas{
+        width:320px; 
+        height:320px;
+    }
+    #canvasCarro{
+        width:320px; 
+        height:320px;
+    }
+}
+
+/* Medium devices (tablets, 768px and up) */
+@media (min-width: 768px) and (max-width: 991.98px) { 
+    #canvas{
+        width:440px; 
+        height:440px;
+    }
+    #canvasCarro{
+        width:440px; 
+        height:440px;
+    }
+}
+
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+    #canvas{
+        width:560px; 
+        height:560px;
+    }
+    #canvasCarro{
+        width:560px; 
+        height:560px;
+    }
+}
+
+/* Extra large devices (large desktops, 1200px and up) */
+@media (min-width: 1200px) {
+    #canvas{
+        width:560px; 
+        height:560px;
+    }
+    #canvasCarro{
+        width:560px; 
+        height:560px;
+    }
+}
